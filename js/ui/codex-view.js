@@ -24,7 +24,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
 
   const CV = NOA.ui.screens.codex = {
     tab(name) { tab = name; CV.render(); },
-    render() {
+    render(opts) {
+      if (opts && opts.tab) tab = opts.tab;
       const root = document.getElementById('scr-codex');
       UI.clear(root);
       const seg = h('div', { class: 'seg', role: 'tablist' });
@@ -68,7 +69,15 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           } else {
             const prods = sp.products.map((p) => h('span', { class: 'ev', style: { opacity: S().discovered.products[p] ? '1' : '0.4' } }, C().products[p].emoji + ' ' + (S().discovered.products[p] ? t('product.' + p) : '???')));
             b.append(h('div', { class: 'essence-row', style: { justifyContent: 'center' } }, prods));
-            if (sp.feed) b.append(h('p', { class: 'muted', style: { textAlign: 'center' } }, t('item.eats', { list: sp.feed.map((f) => C().species[f].emoji + ' ' + t('species.' + f)).join(', ') })));
+            const goods = (ids) => ids.map((f) => NOA.items.goodEmoji(f) + ' ' + NOA.items.goodName(f)).join(', ');
+            const lines = [];
+            lines.push(sp.family === 'plant' ? '📍 ' + t('zone.' + sp.bed) : '📍 ' + t('bld.' + sp.pen));
+            if (sp.feed) lines.push('🍽️ ' + t('item.eats', { list: goods(sp.feed) }));
+            if (sp.byproduct) lines.push(C().materials[sp.byproduct].emoji + ' ' + t('codex.byproduct', { list: t('material.' + sp.byproduct) }));
+            if (sp.manure) lines.push('💩 ' + t('codex.byproduct', { list: t('material.manure') }));
+            const used = Object.keys(B().recipes).filter((r) => Object.keys(B().recipes[r].inputs).some((x) => sp.products.indexOf(x) >= 0) && sp.products.indexOf(r) < 0);
+            if (used.length) lines.push('🏭 ' + t('codex.usedIn', { list: goods(used) }));
+            b.append(h('div', { class: 'sh-meta', style: { textAlign: 'center' } }, lines.map((l) => h('div', null, l))));
           }
           if (S().discovered.maxLevel[id]) b.append(h('p', { style: { textAlign: 'center' } }, t('codex.bestLevel', { n: S().discovered.maxLevel[id] })));
         }

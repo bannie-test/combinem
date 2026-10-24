@@ -12,29 +12,39 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
 
 NOA.CONTENT = {
   families: {
-    plant:  { lab: 'greenhouse', generator: 'seedSack' },
-    animal: { lab: 'ranch',      generator: 'incubator' }
+    plant:  { lab: 'greenhouse', grid: 'vault' },     // hạt giống sống trong Kho hạt giống
+    animal: { lab: 'ranch',      grid: 'nursery' }    // con giống sống trong Chuồng ươm
   },
 
   /* ---------------------------------------------------------- LOÀI */
-  // hybrid: [bố, mẹ]  -> giống lai, chỉ có được qua Viện lai tạo; thu hoạch ra sản phẩm của CẢ HAI loài
-  // feed  : loài vật nuôi ăn sản phẩm của loài cây nào
+  // bed      : cây trồng ở ruộng (crop) hay vườn hoa (flower)
+  // pen      : vật nuôi sống ở chuồng nào (xem buildings)
+  // feed     : vật nuôi ăn món gì trong Kho nông sản (id sản phẩm hoặc vật liệu)
+  // byproduct: phụ phẩm khi thu hoạch (ngoài hạt giống)  | manure: vật nuôi ra phân bón
+  // hybrid   : [bố, mẹ] -> giống lai, chỉ có từ bàn lai chéo; thu hoạch ra sản phẩm của CẢ HAI loài
   species: {
-    rice:       { family: 'plant',  emoji: '🌾', products: ['rice_1', 'rice_2', 'rice_3'] },
-    tomato:     { family: 'plant',  emoji: '🍅', products: ['tomato_1', 'tomato_2', 'tomato_3'] },
-    strawberry: { family: 'plant',  emoji: '🍓', products: ['strawberry_1', 'strawberry_2', 'strawberry_3'] },
-    rose:       { family: 'plant',  emoji: '🌹', products: ['rose_1', 'rose_2', 'rose_3'] },
-    potato:     { family: 'plant',  emoji: '🥔', products: ['potato_1', 'potato_2', 'potato_3'] },
-    sunflower:  { family: 'plant',  emoji: '🌻', products: ['sunflower_1', 'sunflower_2', 'sunflower_3'] },
-    chicken:    { family: 'animal', emoji: '🐔', products: ['chicken_1', 'chicken_2', 'chicken_3'], feed: ['rice'] },
-    cow:        { family: 'animal', emoji: '🐄', products: ['cow_1', 'cow_2', 'cow_3'], feed: ['rice'] },
-    sheep:      { family: 'animal', emoji: '🐑', products: ['sheep_1', 'sheep_2', 'sheep_3'], feed: ['rice'] },
-    goat:       { family: 'animal', emoji: '🐐', products: ['goat_1', 'goat_2', 'goat_3'], feed: ['rice'] },
-    bee:        { family: 'animal', emoji: '🐝', products: ['bee_1', 'bee_2', 'bee_3'], feed: ['rose', 'sunflower'] },
+    rice:       { family: 'plant',  bed: 'crop',   emoji: '🌾', products: ['rice_1', 'rice_2', 'rice_3'], byproduct: 'straw' },
+    tomato:     { family: 'plant',  bed: 'crop',   emoji: '🍅', products: ['tomato_1', 'tomato_2', 'tomato_3'] },
+    strawberry: { family: 'plant',  bed: 'crop',   emoji: '🍓', products: ['strawberry_1', 'strawberry_2', 'strawberry_3'] },
+    potato:     { family: 'plant',  bed: 'crop',   emoji: '🥔', products: ['potato_1', 'potato_2', 'potato_3'] },
+    rose:       { family: 'plant',  bed: 'flower', emoji: '🌹', products: ['rose_1', 'rose_2', 'rose_3'], byproduct: 'pollen' },
+    sunflower:  { family: 'plant',  bed: 'flower', emoji: '🌻', products: ['sunflower_1', 'sunflower_2', 'sunflower_3'], byproduct: 'pollen' },
+    chicken:    { family: 'animal', pen: 'coop',      emoji: '🐔', products: ['chicken_1', 'chicken_2', 'chicken_3'], feed: ['rice_1'] },
+    cow:        { family: 'animal', pen: 'cowshed',   emoji: '🐄', products: ['cow_1', 'cow_2', 'cow_3'], feed: ['straw'], manure: true },
+    bee:        { family: 'animal', pen: 'apiary',    emoji: '🐝', products: ['bee_1', 'bee_2', 'bee_3'], feed: ['pollen'] },
+    sheep:      { family: 'animal', pen: 'sheepfold', emoji: '🐑', products: ['sheep_1', 'sheep_2', 'sheep_3'], feed: ['straw'] },
+    goat:       { family: 'animal', pen: 'goatpen',   emoji: '🐐', products: ['goat_1', 'goat_2', 'goat_3'], feed: ['straw'], manure: true },
     // Giống lai (giữ nguyên tên loài thật)
-    pomato:     { family: 'plant',  emoji: '🍅', emoji2: '🥔', hybrid: ['tomato', 'potato'] },
-    rosaberry:  { family: 'plant',  emoji: '🍓', emoji2: '🌹', hybrid: ['strawberry', 'rose'] },
-    geep:       { family: 'animal', emoji: '🐑', emoji2: '🐐', hybrid: ['sheep', 'goat'], feed: ['rice'] }
+    pomato:     { family: 'plant',  bed: 'crop',   emoji: '🍅', emoji2: '🥔', hybrid: ['tomato', 'potato'] },
+    rosaberry:  { family: 'plant',  bed: 'flower', emoji: '🍓', emoji2: '🌹', hybrid: ['strawberry', 'rose'], byproduct: 'pollen' },
+    geep:       { family: 'animal', pen: 'sheepfold', emoji: '🐑', emoji2: '🐐', hybrid: ['sheep', 'goat'], feed: ['straw'] }
+  },
+
+  /* ---------------------------------------------------------- VẬT LIỆU (phụ phẩm, nằm trong Kho nông sản) */
+  materials: {
+    straw:  { emoji: '🧹' },   // Rơm: từ lúa — thức ăn của bò, cừu, dê
+    pollen: { emoji: '🌼' },   // Phấn hoa: từ vườn hoa — thức ăn của ong
+    manure: { emoji: '💩' }    // Phân bón hữu cơ: từ bò, dê — bón ruộng để tăng sản lượng
   },
 
   /* ---------------------------------------------------------- SẢN PHẨM (3 cấp chế biến mỗi loài) */
@@ -112,19 +122,13 @@ NOA.CONTENT = {
   ],
 
   /* ---------------------------------------------------------- VẬT PHẨM HỖ TRỢ */
-  // target: breed = kéo thả lên hạt giống / con giống | slot = kéo lên ô đất / chuồng
+  // target: breed = dùng lên hạt giống / con giống | slot = dùng lên ô ruộng / vật nuôi / lượt chế biến
   boosters: {
     clover:     { emoji: '🍀', target: 'breed' },
     stabilizer: { emoji: '🧪', target: 'breed' },
     stardust:   { emoji: '✨', target: 'breed' },
     tonic:      { emoji: '🧃', target: 'slot' },
     loupe:      { emoji: '🔍', target: 'breed' }
-  },
-
-  /* ---------------------------------------------------------- MÁY TẠO */
-  generators: {
-    seedSack:  { emoji: '🌱', family: 'plant' },
-    incubator: { emoji: '🐣', family: 'animal' }
   },
 
   /* ---------------------------------------------------------- LINH VẬT */
@@ -212,15 +216,85 @@ NOA.CONTENT = {
     { id: 'l5', unlock: { earth: 50 } }
   ],
 
+  /* ---------------------------------------------------------- CÔNG TRÌNH TRÊN BẢN ĐỒ */
+  // kind: house | orders | barn | market | lab | shrine | gacha | pen | factory | ship
+  // unlock: khóa tính năng trong balance.unlocks (hoặc theo cấp mở của loài / xưởng)
+  buildings: {
+    house:      { kind: 'house',   emoji: '🏡', roof: '#e8735a' },
+    orders:     { kind: 'orders',  emoji: '📋', roof: '#b9804f' },
+    barn:       { kind: 'barn',    emoji: '📦', roof: '#d0473c' },
+    market:     { kind: 'market',  emoji: '🧺', roof: '#ff8fa3' },
+    greenhouse: { kind: 'lab', lab: 'greenhouse', emoji: '🌱', roof: '#8fd8f0' },
+    ranch:      { kind: 'lab', lab: 'ranch',      emoji: '🐾', roof: '#c4503f', unlock: 'ranch' },
+    shrine:     { kind: 'shrine',  emoji: '⛩️', roof: '#e2574c', unlock: 'shrine' },
+    wishtree:   { kind: 'gacha',   emoji: '🎋', roof: '#5cbb49', unlock: 'blindbox' },
+    coop:       { kind: 'pen',     emoji: '🐔', roof: '#e86a4f' },
+    cowshed:    { kind: 'pen',     emoji: '🐄', roof: '#c9453a' },
+    apiary:     { kind: 'pen',     emoji: '🐝', roof: '#f2b532' },
+    sheepfold:  { kind: 'pen',     emoji: '🐑', roof: '#9b7bd1' },
+    goatpen:    { kind: 'pen',     emoji: '🐐', roof: '#7d9a4a' },
+    mill:       { kind: 'factory', emoji: '🏭', roof: '#a6764b' },
+    kitchen:    { kind: 'factory', emoji: '🍳', roof: '#ef8a3c' },
+    dairy:      { kind: 'factory', emoji: '🧀', roof: '#4fb0d8' },
+    craft:      { kind: 'factory', emoji: '🧵', roof: '#c26fb4' },
+    dock:       { kind: 'ship',    emoji: '🚀', roof: '#5b6bb8', unlock: 'ship' }
+  },
+
+  /* ---------------------------------------------------------- BẢN ĐỒ NÔNG TRẠI (đơn vị: px ở mức zoom 1) */
+  // Mỗi khu là một mảng đất riêng có biển tên — kiểu Hay Day / Township.
+  map: {
+    width: 520,
+    height: 1790,
+    zones: [
+      { id: 'home',      x: 16, y: 16,   w: 488, h: 206, ground: 'cobble' },
+      { id: 'crop',      x: 16, y: 240,  w: 488, h: 330, ground: 'soil' },
+      { id: 'flower',    x: 16, y: 588,  w: 488, h: 192, ground: 'garden' },
+      { id: 'research',  x: 16, y: 798,  w: 488, h: 206, ground: 'stone' },
+      { id: 'livestock', x: 16, y: 1022, w: 488, h: 362, ground: 'meadow' },
+      { id: 'workshop',  x: 16, y: 1402, w: 488, h: 198, ground: 'wood' },
+      { id: 'dock',      x: 16, y: 1618, w: 488, h: 156, ground: 'pad' }
+    ],
+    buildings: {
+      house:      { x: 28,  y: 62,   w: 110, h: 140 },
+      orders:     { x: 150, y: 62,   w: 102, h: 140 },
+      barn:       { x: 264, y: 62,   w: 112, h: 140 },
+      market:     { x: 388, y: 62,   w: 104, h: 140 },
+      greenhouse: { x: 28,  y: 846,  w: 112, h: 140 },
+      ranch:      { x: 152, y: 846,  w: 112, h: 140 },
+      shrine:     { x: 276, y: 846,  w: 100, h: 140 },
+      wishtree:   { x: 388, y: 846,  w: 104, h: 140 },
+      coop:       { x: 28,  y: 1068, w: 148, h: 148 },
+      cowshed:    { x: 186, y: 1068, w: 148, h: 148 },
+      apiary:     { x: 344, y: 1068, w: 148, h: 148 },
+      sheepfold:  { x: 28,  y: 1226, w: 148, h: 148 },
+      goatpen:    { x: 186, y: 1226, w: 148, h: 148 },
+      mill:       { x: 28,  y: 1450, w: 110, h: 140 },
+      kitchen:    { x: 150, y: 1450, w: 110, h: 140 },
+      dairy:      { x: 272, y: 1450, w: 110, h: 140 },
+      craft:      { x: 394, y: 1450, w: 98,  h: 140 },
+      dock:       { x: 120, y: 1660, w: 280, h: 104 }
+    },
+    plots: {
+      crop:   { x: 34, y: 290, cols: 4, w: 104, h: 80, gap: 12 },
+      flower: { x: 34, y: 636, cols: 3, w: 140, h: 62, gap: 12 }
+    },
+    deco: [
+      { e: '🌳', x: 486, y: 214, s: 34 }, { e: '🌲', x: 2, y: 560, s: 30 }, { e: '🌳', x: 488, y: 772, s: 30 },
+      { e: '🪨', x: 404, y: 1250, s: 22 }, { e: '🦆', x: 420, y: 1300, s: 22 }, { e: '🌳', x: 2, y: 1390, s: 32 },
+      { e: '🌷', x: 470, y: 1600, s: 22 }, { e: '🌳', x: 30, y: 1700, s: 34 }, { e: '🌳', x: 456, y: 1700, s: 34 }
+    ],
+    pond: { x: 350, y: 1236, w: 140, h: 126 }
+  },
+
   /* ---------------------------------------------------------- HƯỚNG DẪN (robot Đậu) */
-  // done: sự kiện hoàn thành bước | count: số lần
+  // done: sự kiện hoàn thành bước | count: số lần | focus: id phần tử cần làm nổi bật trên bản đồ
   tutorial: [
-    { id: 'tap',     done: 'item.spawned',   count: 2, focus: 'gen-seedSack' },
-    { id: 'merge',   done: 'merge.done',     count: 1, focus: 'board' },
-    { id: 'plant',   done: 'plot.planted',   count: 1, focus: 'field' },
-    { id: 'harvest', done: 'harvest',        count: 1, focus: 'field' },
-    { id: 'order',   done: 'order.complete', count: 1, focus: 'orders' },
-    { id: 'animal',  done: 'pen.placed',     count: 1, focus: 'gen-incubator' },
-    { id: 'feed',    done: 'pen.fed',        count: 1, focus: 'field' }
+    { id: 'plant',   done: 'plot.planted',       count: 1, focus: 'plot-crop-0' },
+    { id: 'harvest', done: 'harvest',            count: 1, focus: 'plot-crop-0' },
+    { id: 'merge',   done: 'merge.done',         count: 1, focus: 'bld-greenhouse' },
+    { id: 'order',   done: 'order.complete',     count: 1, focus: 'bld-orders' },
+    { id: 'animal',  done: 'pen.placed',         count: 1, focus: 'bld-ranch' },
+    { id: 'feed',    done: 'pen.fed',            count: 1, focus: 'bld-coop' },
+    { id: 'process', done: 'production.started', count: 1, focus: 'bld-mill' }
   ]
 };

@@ -1,7 +1,8 @@
 /*
- * Farm: planting seeds in plots, raising animals in pens, feeding, harvesting.
- * Harvest output = base units by level × (1 + Yield%) × modifiers, packed into
- * the highest product tiers so the board does not flood.
+ * Farm: 🌾 crop fields, 🌸 flower beds and 🐄 livestock pens.
+ *   Plant a seed from the vault -> harvest gives produce (barn) + next-generation SEEDS (vault)
+ *   + byproducts (straw / pollen). Animals eat feed from the barn -> produce goods, sometimes
+ *   young animals (nursery) and manure (fertilizer).
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
@@ -14,7 +15,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   const I = () => NOA.items;
 
   const F = NOA.farm = {
-    /* ------------------------------------------------------------ timing */
+    /* ------------------------------------------------------------ timing & yield */
     growMs(item) {
       const h = B().harvest;
       const eco = B().species[item.species];
@@ -30,221 +31,279 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const u = base * (1 + I().stat(item, 'yield') * h.yieldBonusPerPoint);
       return NOA.mods.value('harvest.units', u, { family: I().family(item) });
     },
-    /** Estimated product count (for the info card) */
     estimateUnits(item) { return Math.max(1, Math.round(F.units(item))); },
-
-    /** Build the product items for one harvest / production cycle */
-    makeOutput(item) {
-      const h = B().harvest;
-      const raw = F.units(item);
-      let n = Math.floor(raw);
-      if (U.chance(raw - n)) n += 1;
-      n = Math.max(1, n);
-      const sp = C().species[item.species];
-      const parts = sp.hybrid ? [[sp.hybrid[0], Math.ceil(n / 2)], [sp.hybrid[1], Math.floor(n / 2)]] : [[item.species, n]];
-      const out = [];
-      let geneCount = 0;
-      const tierUnits = B().product.tierUnits;
-      const pack = h.packFromUnits || {};
-      for (const [speciesId, count] of parts) {
-        let left = count;
-        const prods = C().species[speciesId].products;
-        let top = Math.min(h.maxProductTier, prods.length);
-        while (top > 1 && pack[top] && count < pack[top]) top -= 1;
-        while (left > 0) {
-          let tier = top;
-          while (tier > 1 && tierUnits[tier] > left) tier -= 1;
-          left -= tierUnits[tier];
-          const q = I().stat(item, 'quality') + U.randInt(-h.starJitter, h.starJitter);
-          const gene = item.gene && U.chance(h.geneProductChance) ? { id: item.gene.id, purity: item.gene.purity } : null;
-          if (gene) geneCount += 1;
-          out.push(I().newProduct(prods[tier - 1], I().starsFor(q), gene));
-        }
-      }
-      return { products: out, units: n, geneCount };
-    },
-
-    /* ------------------------------------------------------------ plots */
-    plant(plotIdx, boardIdx) {
-      const plot = S().plots[plotIdx];
-      const it = S().board[boardIdx];
-      if (!plot || plot.seed || !it || it.kind !== 'seed' || it.locked) return false;
-      S().board[boardIdx] = null;
-      plot.seed = it;
-      plot.charm = null;
-      plot.start = NOA.time.now();
-      plot.end = plot.start + F.growMs(it);
-      plot.out = [];
-      NOA.board.changed({ removed: [boardIdx] });
-      NOA.events.emit('plot.planted', { plotIdx, item: it });
-      NOA.events.emit('field.changed', {});
-      return true;
-    },
+    roll(x) { let n = Math.floor(x); if (U.chance(x - n)) n += 1; return n; },
     isReady(slot) { return !!(slot && slot.end && NOA.time.now() >= slot.end); },
     progress(slot) {
       if (!slot || !slot.end) return 0;
       return U.clamp((NOA.time.now() - slot.start) / Math.max(1, slot.end - slot.start), 0, 1);
     },
-    /** Collect a ready plot -> { placed, remaining } */
-    harvest(plotIdx) {
-      const plot = S().plots[plotIdx];
-      if (!plot || !plot.seed || !F.isReady(plot)) return null;
-      let first = false;
-      if (!plot.out || !plot.out.length) {
-        const res = F.makeOutput(plot.seed);
-        plot.out = res.products;
-        plot.units = res.units;
-        first = true;
-        F.onOutput(plot.seed, res);
-      }
-      const placed = F.placeAll(plot.out);
-      const seed = plot.seed;
-      if (!plot.out.length) { plot.seed = null; plot.start = plot.end = 0; plot.units = 0; }
-      if (first || placed.length) {
-        S().stats.harvests += first ? 1 : 0;
-        NOA.events.emit('harvest', { plotIdx, item: seed, placed, remaining: plot.out.length, kind: 'plot' });
-      }
-      NOA.events.emit('field.changed', {});
-      return { placed, remaining: plot.out.length };
-    },
-    placeAll(list) {
-      const placed = [];
-      while (list.length) {
-        const r = NOA.board.placeOrStore(list[0], null);
-        if (!r) break;
-        placed.push({ item: list.shift(), where: r.where, index: r.index });
-      }
-      return placed;
-    },
-    onOutput(source, res) {
+
+    /** Goods for one harvest / production cycle: [{ pid, stars, gene }] (hybrids split across both parents) */
+    makeGoods(item, units) {
       const h = B().harvest;
-      NOA.progress.addXP(res.units * B().xp.harvestPerUnit);
-      if (res.geneCount) NOA.res.add('rp', res.geneCount * h.geneRP);
-      res.products.forEach((p) => { S().discovered.products[p.product] = true; });
+      const sp = C().species[item.species];
+      const parts = sp.hybrid ? [[sp.hybrid[0], Math.ceil(units / 2)], [sp.hybrid[1], Math.floor(units / 2)]] : [[item.species, units]];
+      const out = [];
+      for (const [speciesId, n] of parts) {
+        const pid = C().species[speciesId].products[0];
+        for (let i = 0; i < n; i++) {
+          const q = I().stat(item, 'quality') + U.randInt(-h.starJitter, h.starJitter);
+          const gene = item.gene && U.chance(h.geneProductChance) ? { id: item.gene.id, purity: item.gene.purity } : null;
+          out.push({ pid, stars: I().starsFor(q), gene });
+        }
+      }
+      return out;
+    },
+    addGoods(list) {
+      for (const g of list) NOA.barn.add(g.pid, 1, { stars: g.stars, gene: g.gene, force: true });
+      return list.length;
+    },
+    countGenes(list) { return list.filter((g) => g.gene).length; },
+
+    /* ------------------------------------------------------------ fields */
+    plots(bed) { return S().fields[bed]; },
+    plotFits(bed, item) { return !!item && item.kind === 'seed' && C().species[item.species].bed === bed; },
+    /** Plant the seed at vault[vaultIdx] into fields[bed][idx] */
+    plant(bed, idx, vaultIdx) {
+      const plot = S().fields[bed][idx];
+      const it = S().vault.cells[vaultIdx];
+      if (!plot || plot.seed || !F.plotFits(bed, it) || it.locked) return false;
+      S().vault.cells[vaultIdx] = null;
+      plot.seed = it;
+      plot.start = NOA.time.now();
+      plot.end = plot.start + F.growMs(it);
+      NOA.grids.changed('vault', { removed: [vaultIdx] });
+      NOA.grids.flushPending();
+      NOA.events.emit('plot.planted', { bed, idx, item: it });
+      NOA.events.emit('field.changed', { bed });
+      return true;
+    },
+    /** -> { goods, seeds:[{item, where}], mats:{id:n}, lostSeeds } | { error:'barn', need } | null */
+    harvest(bed, idx) {
+      const plot = S().fields[bed][idx];
+      if (!plot || !plot.seed || !F.isReady(plot)) return null;
+      const seed = plot.seed;
+      const fert = plot.fert ? B().fertilizer : null;
+      let units = F.roll(F.units(seed) * (fert ? fert.unitsMult : 1));
+      units = Math.max(1, units);
+      const sp = C().species[seed.species];
+      const mats = {};
+      if (sp.byproduct) {
+        const bp = B().byproducts[sp.byproduct];
+        mats[sp.byproduct] = bp.base + Math.floor(units / bp.perUnits);
+      }
+      const need = units + Object.values(mats).reduce((a, b) => a + b, 0);
+      if (NOA.barn.free() < need) return { error: 'barn', need };
+      const goods = F.makeGoods(seed, units);
+      F.addGoods(goods);
+      for (const m in mats) NOA.barn.add(m, mats[m], { force: true });
+      // next-generation seeds
+      const cfg = B().harvest.seeds;
+      let nSeeds = (cfg.countByLevel[seed.level] || 1) + (fert ? fert.extraSeeds : 0);
+      if (U.chance(cfg.extraChance + I().stat(seed, 'yield') * cfg.extraPerYieldPoint)) nSeeds += 1;
+      const seeds = [];
+      let lostSeeds = 0;
+      for (let i = 0; i < nSeeds; i++) {
+        const child = NOA.genetics.offspring(seed);
+        const where = NOA.grids.place(child);
+        if (where === -1) lostSeeds += 1;
+        else seeds.push({ item: child, where });
+        if (child.gene) NOA.grids.recordGene(child.gene.id, [], 'plant');
+      }
+      plot.seed = null;
+      plot.start = plot.end = 0;
+      plot.fert = false;
+      F.afterOutput(goods, units);
+      S().stats.harvests += 1;
+      NOA.events.emit('harvest', { bed, idx, item: seed, goods, seeds, mats, lostSeeds });
+      NOA.events.emit('field.changed', { bed });
+      return { goods, seeds, mats, lostSeeds, units };
+    },
+    afterOutput(goods, units) {
+      const h = B().harvest;
+      NOA.progress.addXP(units * B().xp.harvestPerUnit);
+      const g = F.countGenes(goods);
+      if (g) NOA.res.add('rp', g * h.geneRP);
       if (U.chance(h.naturalCloverChance)) {
         S().boosters.clover = (S().boosters.clover || 0) + 1;
         NOA.events.emit('harvest.clover', {});
       }
     },
-    unlockPlot() {
-      const i = S().plots.length;
-      const f = B().farm;
-      if (i >= f.plotsMax) return { error: 'max' };
-      if (S().level < f.plotLevelReq[i]) return { error: 'level', level: f.plotLevelReq[i] };
-      if (!NOA.res.spend({ coins: f.plotCost[i] })) return { error: 'coins' };
-      S().plots.push({ seed: null, start: 0, end: 0, out: [] });
-      NOA.events.emit('field.changed', {});
+    fertilize(bed, idx) {
+      const plot = S().fields[bed][idx];
+      if (!plot || plot.fert) return { error: 'already' };
+      if (!NOA.barn.take('manure', 1)) return { error: 'none' };
+      plot.fert = true;
+      NOA.events.emit('field.changed', { bed });
+      return { ok: true };
+    },
+    nextPlotCost(bed) {
+      const f = B().fields[bed];
+      const i = S().fields[bed].length;
+      if (i >= f.max) return null;
+      return { coins: f.cost[i], level: f.levelReq[i] };
+    },
+    /** Plots whose price is 0 open by themselves once the level is reached */
+    grantFreePlots() {
+      let n = 0;
+      for (const bed of ['crop', 'flower']) {
+        for (let c = F.nextPlotCost(bed); c && !c.coins && S().level >= c.level; c = F.nextPlotCost(bed)) {
+          S().fields[bed].push(NOA.newPlot(bed));
+          n += 1;
+        }
+      }
+      if (n) NOA.events.emit('field.changed', { granted: n });
+      return n;
+    },
+    unlockPlot(bed) {
+      const c = F.nextPlotCost(bed);
+      if (!c) return { error: 'max' };
+      if (S().level < c.level) return { error: 'level', level: c.level };
+      if (c.coins && !NOA.res.spend({ coins: c.coins })) return { error: 'coins' };
+      S().fields[bed].push(NOA.newPlot(bed));
+      NOA.events.emit('field.changed', { bed });
       return { ok: true };
     },
 
     /* ------------------------------------------------------------ pens */
-    placeAnimal(penIdx, boardIdx) {
-      const pen = S().pens[penIdx];
-      const it = S().board[boardIdx];
-      if (!pen || pen.animal || !it || it.kind !== 'animal' || it.locked) return false;
-      S().board[boardIdx] = null;
-      pen.animal = it;
-      pen.start = pen.end = 0;
-      pen.out = [];
-      NOA.board.changed({ removed: [boardIdx] });
-      F.startCycle(pen);
-      NOA.events.emit('pen.placed', { penIdx, item: it });
-      NOA.events.emit('field.changed', {});
-      return true;
+    penSpecies(penId) {
+      return Object.keys(C().species).filter((id) => C().species[id].pen === penId);
     },
-    canFeed(pen, item) {
-      if (!pen || !pen.animal || !item || item.kind !== 'product' || item.locked) return false;
-      const feed = C().species[pen.animal.species].feed || [];
-      return feed.indexOf(C().products[item.product].species) >= 0 && pen.feed < B().farm.feedCapacity;
+    penOpen(penId) { return F.penSpecies(penId).some((sp) => !C().species[sp].hybrid && NOA.progress.speciesUnlocked(sp)); },
+    penFits(penId, item) { return !!item && item.kind === 'animal' && C().species[item.species].pen === penId; },
+    placeAnimal(penId, nurseryIdx) {
+      const pen = S().pens[penId];
+      const it = S().nursery.cells[nurseryIdx];
+      if (!pen || !F.penFits(penId, it) || it.locked) return { error: 'fit' };
+      const slot = pen.slots.indexOf(null);
+      if (slot < 0) return { error: 'full' };
+      S().nursery.cells[nurseryIdx] = null;
+      pen.slots[slot] = { animal: it, start: 0, end: 0 };
+      NOA.grids.changed('nursery', { removed: [nurseryIdx] });
+      NOA.events.emit('pen.placed', { penId, slot, item: it });
+      NOA.events.emit('pens.changed', { penId });
+      return { ok: true, slot };
     },
-    feed(penIdx, boardIdx) {
-      const pen = S().pens[penIdx];
-      const it = S().board[boardIdx];
-      if (!F.canFeed(pen, it)) return false;
-      const units = B().product.tierUnits[C().products[it.product].tier];
-      pen.feed = Math.min(B().farm.feedCapacity, pen.feed + units);
-      S().board[boardIdx] = null;
-      NOA.board.changed({ removed: [boardIdx] });
-      F.startCycle(pen);
-      NOA.events.emit('pen.fed', { penIdx, units });
-      NOA.events.emit('field.changed', {});
-      return true;
-    },
-    startCycle(pen) {
-      if (!pen.animal || pen.end || pen.feed < 1) return false;
-      pen.feed -= 1;
-      pen.start = NOA.time.now();
-      pen.end = pen.start + F.growMs(pen.animal);
-      return true;
-    },
-    collect(penIdx) {
-      const pen = S().pens[penIdx];
-      if (!pen || !pen.animal || !F.isReady(pen)) return null;
-      let first = false;
-      if (!pen.out || !pen.out.length) {
-        const res = F.makeOutput(pen.animal);
-        pen.out = res.products;
-        pen.units = res.units;
-        first = true;
-        F.onOutput(pen.animal, res);
+    feedFor(animal) { return C().species[animal.species].feed || []; },
+    hungry(slot) { return !!(slot && slot.animal && !slot.end); },
+    /** Feed every idle animal of a pen from the barn -> { fed, missing:[feedIds] } */
+    feedAll(penId) {
+      const pen = S().pens[penId];
+      let fed = 0;
+      const missing = new Set();
+      pen.slots.forEach((slot) => {
+        if (!F.hungry(slot)) return;
+        const feeds = F.feedFor(slot.animal);
+        const f = feeds.find((id) => NOA.barn.has(id, 1));
+        if (!f) { feeds.forEach((x) => missing.add(x)); return; }
+        NOA.barn.take(f, 1);
+        slot.start = NOA.time.now();
+        slot.end = slot.start + F.growMs(slot.animal);
+        fed += 1;
+      });
+      if (fed) {
+        NOA.events.emit('pen.fed', { penId, fed });
+        NOA.events.emit('pens.changed', { penId });
       }
-      const placed = F.placeAll(pen.out);
-      if (!pen.out.length) {
-        pen.start = pen.end = 0;
-        pen.units = 0;
-        F.startCycle(pen);
-      }
-      if (first || placed.length) {
-        S().stats.harvests += first ? 1 : 0;
-        NOA.events.emit('harvest', { penIdx, item: pen.animal, placed, remaining: pen.out.length, kind: 'pen' });
-      }
-      NOA.events.emit('field.changed', {});
-      return { placed, remaining: pen.out.length };
+      return { fed, missing: [...missing] };
     },
-    removeAnimal(penIdx) {
-      const pen = S().pens[penIdx];
-      if (!pen || !pen.animal || (pen.out && pen.out.length)) return false;
-      const i = NOA.board.nearestEmpty(null);
-      if (i < 0) return false;
-      S().board[i] = pen.animal;
-      pen.animal = null;
-      pen.start = pen.end = 0;
-      NOA.board.changed({ placed: [i] });
-      NOA.events.emit('field.changed', {});
+    readyCount(penId) { return S().pens[penId].slots.filter((s) => s && F.isReady(s)).length; },
+    /** Collect every ready animal -> { goods, young, manure, lostYoung } | { error:'barn' } */
+    collectAll(penId) {
+      const pen = S().pens[penId];
+      const lv = B().livestock;
+      const result = { goods: [], young: [], manure: 0, lostYoung: 0, collected: 0 };
+      for (const slot of pen.slots) {
+        if (!slot || !F.isReady(slot)) continue;
+        const a = slot.animal;
+        const units = Math.max(1, F.roll(F.units(a)));
+        const manure = C().species[a.species].manure && U.chance(lv.manureChance) ? 1 : 0;
+        if (NOA.barn.free() < units + manure) { result.error = 'barn'; break; }
+        const goods = F.makeGoods(a, units);
+        F.addGoods(goods);
+        if (manure) NOA.barn.add('manure', manure, { force: true });
+        result.goods.push(...goods);
+        result.manure += manure;
+        if (U.chance(lv.offspringChance + lv.offspringPerLevel * a.level)) {
+          const child = NOA.genetics.offspring(a);
+          const where = NOA.grids.place(child);
+          if (where === -1) result.lostYoung += 1;
+          else result.young.push({ item: child, where });
+          if (child.gene) NOA.grids.recordGene(child.gene.id, [], 'animal');
+        }
+        slot.start = slot.end = 0;
+        result.collected += 1;
+        F.afterOutput(goods, units);
+      }
+      if (result.collected) {
+        S().stats.harvests += 1;
+        NOA.events.emit('harvest', Object.assign({ penId, kind: 'pen' }, result));
+        NOA.events.emit('pens.changed', { penId });
+      }
+      return result;
+    },
+    removeAnimal(penId, slotIdx) {
+      const pen = S().pens[penId];
+      const slot = pen.slots[slotIdx];
+      if (!slot || F.isReady(slot)) return false;
+      if (!NOA.grids.hasRoom('nursery')) return false;
+      NOA.grids.place(slot.animal);
+      pen.slots[slotIdx] = null;
+      NOA.events.emit('pens.changed', { penId });
       return true;
     },
-    unlockPen() {
-      const i = S().pens.length;
-      const f = B().farm;
-      if (i >= f.pensMax) return { error: 'max' };
-      if (S().level < f.penLevelReq[i]) return { error: 'level', level: f.penLevelReq[i] };
-      if (!NOA.res.spend({ coins: f.penCost[i] })) return { error: 'coins' };
-      S().pens.push({ animal: null, feed: 0, start: 0, end: 0, out: [] });
-      NOA.events.emit('field.changed', {});
+    nextSlotCost(penId) {
+      const cfg = B().livestock.pens[penId];
+      const n = S().pens[penId].slots.length;
+      if (n >= cfg.slotsMax) return null;
+      return cfg.slotCost[n] || 0;
+    },
+    unlockSlot(penId) {
+      const cost = F.nextSlotCost(penId);
+      if (cost == null) return { error: 'max' };
+      if (cost && !NOA.res.spend({ coins: cost })) return { error: 'coins' };
+      S().pens[penId].slots.push(null);
+      NOA.events.emit('pens.changed', { penId });
       return { ok: true };
     },
 
     /* ------------------------------------------------------------ growth tonic */
-    tonic(type, idx) {
-      const slot = type === 'plot' ? S().plots[idx] : S().pens[idx];
-      if (!slot || !slot.end || F.isReady(slot) || (S().boosters.tonic || 0) < 1) return false;
+    tonicPlot(bed, idx) {
+      const plot = S().fields[bed][idx];
+      if (!plot || !plot.end || F.isReady(plot) || (S().boosters.tonic || 0) < 1) return false;
       S().boosters.tonic -= 1;
-      slot.end = NOA.time.now();
+      plot.end = NOA.time.now();
       NOA.events.emit('booster.used', { id: 'tonic' });
-      NOA.events.emit('field.changed', {});
+      NOA.events.emit('field.changed', { bed });
+      return true;
+    },
+    tonicPen(penId) {
+      const pen = S().pens[penId];
+      const slot = pen.slots.find((s) => s && s.end && !F.isReady(s));
+      if (!slot || (S().boosters.tonic || 0) < 1) return false;
+      S().boosters.tonic -= 1;
+      pen.slots.forEach((s) => { if (s && s.end && !F.isReady(s)) s.end = NOA.time.now(); });
+      NOA.events.emit('booster.used', { id: 'tonic' });
+      NOA.events.emit('pens.changed', { penId });
       return true;
     },
 
-    /** Called every tick: emits when slots become ready */
+    /** Called every tick: emits when something becomes ready */
     tick() {
-      let changed = false;
-      for (const list of [S().plots, S().pens]) {
-        for (const slot of list) {
-          const ready = F.isReady(slot);
-          if (ready !== !!slot._ready) { slot._ready = ready; changed = true; }
+      for (const bed in S().fields) {
+        let changed = false;
+        for (const p of S().fields[bed]) {
+          const r = F.isReady(p);
+          if (r !== !!p._r) { p._r = r; changed = true; }
         }
+        if (changed) NOA.events.emit('field.changed', { bed, ready: true });
       }
-      if (changed) NOA.events.emit('field.changed', { ready: true });
+      for (const penId in S().pens) {
+        const n = F.readyCount(penId);
+        const pen = S().pens[penId];
+        if (n !== (pen._r || 0)) { pen._r = n; NOA.events.emit('pens.changed', { penId, ready: true }); }
+      }
     }
   };
 })();

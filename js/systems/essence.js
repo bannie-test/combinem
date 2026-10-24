@@ -25,12 +25,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const tier = C().genes[item.gene.id].tier;
       return (B().essence.decomposeYield[tier] || [])[item.gene.purity] || 0;
     },
-    decompose(boardIdx) {
-      const it = S().board[boardIdx];
+    decompose(ref) {
+      const it = S()[ref.grid].cells[ref.index];
       if (!E.enabled() || !it || !it.gene || it.locked) return null;
       const n = E.yieldOf(it);
       S().essence[it.gene.id] = E.amount(it.gene.id) + n;
-      NOA.board.remove(boardIdx);
+      NOA.grids.remove(ref.grid, ref.index);
       NOA.events.emit('essence.changed', { gene: it.gene.id, n });
       return { gene: it.gene.id, n };
     },
@@ -39,8 +39,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       return E.enabled() && I().isBreed(item) && !item.gene && !item.locked &&
         C().genes[geneId].family === I().family(item) && E.amount(geneId) >= E.injectCost(geneId);
     },
-    inject(boardIdx, geneId) {
-      const it = S().board[boardIdx];
+    inject(ref, geneId) {
+      const it = S()[ref.grid].cells[ref.index];
       if (!E.canInject(it, geneId)) return null;
       S().essence[geneId] -= E.injectCost(geneId);
       const tier = C().genes[geneId].tier;
@@ -48,22 +48,22 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (ok) {
         it.gene = { id: geneId, purity: 1 };
         it.carrier = null;
-        NOA.board.recordGene(geneId, [{ type: 'awaken', gene: geneId }], I().family(it));
+        NOA.grids.recordGene(geneId, [{ type: 'awaken', gene: geneId }], I().family(it));
       }
-      NOA.board.changed({ updated: [boardIdx] });
+      NOA.grids.changed(ref.grid, { updated: [ref.index] });
       NOA.events.emit('essence.changed', { gene: geneId });
       return { ok };
     },
 
     init() {
-      NOA.hooks.add('item.actions', (actions, item, index) => {
-        if (!E.enabled() || !item || !item.gene || index == null) return actions;
+      NOA.hooks.add('item.actions', (actions, item, ref) => {
+        if (!E.enabled() || !item || !item.gene || !ref) return actions;
         actions.push({
           id: 'decompose',
           label: NOA.t('essence.decompose', { n: E.yieldOf(item) }),
           kind: 'ghost',
           run() {
-            const r = E.decompose(index);
+            const r = E.decompose(ref);
             if (r) NOA.ui.toast(NOA.t('essence.decomposed', { n: r.n, gene: I().geneName(r.gene) }));
           }
         });
@@ -91,10 +91,11 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         const btn = h('button', { class: 'chip-btn', type: 'button' },
           C().genes[g].emoji + ' ' + I().geneName(g) + ' × ' + E.amount(g));
         btn.addEventListener('click', () => {
+          const grid = NOA.labs.grid(lab);
           const cands = [];
-          S().board.forEach((it, i) => { if (E.canInject(it, g)) cands.push(i); });
+          S()[grid].cells.forEach((it, i) => { if (E.canInject(it, g)) cands.push(i); });
           if (!cands.length) { NOA.ui.toast(NOA.t('essence.noTarget', { n: E.injectCost(g) })); return; }
-          const r = E.inject(cands[0], g);
+          const r = E.inject({ grid, index: cands[0] }, g);
           NOA.ui.toast(NOA.t(r && r.ok ? 'essence.injected' : 'essence.injectFail', { gene: I().geneName(g) }));
           NOA.events.emit('lab.changed', { lab });
         });

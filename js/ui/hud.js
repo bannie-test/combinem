@@ -1,6 +1,7 @@
 /*
- * Sky header: HUD (level, energy, coins, gems), robot Bean with speech bubble,
- * sky state (day/night, weather, moon, Earth), events, shooting stars and the idle firefly.
+ * HUD: the top bar (level, coins, gems, codex, settings) on every screen, plus the widgets that
+ * float over the farm map: robot Bean with its speech bubble, the sky widget (weather, moon, Earth,
+ * daily gift), live event chips, shooting stars and the idle firefly.
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
@@ -24,78 +25,87 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     const from = [164, 122, 88], to = [74, 176, 214];
     return 'rgb(' + mix(from[0], to[0]) + ',' + mix(from[1], to[1]) + ',' + mix(from[2], to[2]) + ')';
   };
+  const IDLE_TIPS = 8;   // i18n bean.idle1..8
+  const WX_ICON = { sunny: '☀️', cloudy: '⛅', rain: '🌧️', storm: '⛈️' };
 
   const HUD = NOA.ui.hud = {
     els: {},
+
+    /* ------------------------------------------------------------ top bar */
     render() {
-      const sky = document.getElementById('sky');
-      UI.clear(sky);
+      const bar = document.getElementById('hud');
+      if (!bar) return;
+      UI.clear(bar);
       const e = HUD.els;
       e.level = h('button', { type: 'button', class: 'lvl', 'aria-label': t('ui.level'), on: { click: HUD.showXP } }, h('b', null, ''));
-      e.energy = h('button', { type: 'button', class: 'pill pill--energy', on: { click: () => NOA.ui.panels.energyModal() } },
-        h('span', { class: 'pi' }, '⚡'), h('b', null, ''), h('span', { class: 'pill-timer', hidden: true }, ''));
-      e.coins = h('button', { type: 'button', class: 'pill pill--coins', on: { click: () => UI.show('shop') } }, h('span', { class: 'pi' }, '🪙'), h('b', null, ''));
-      e.gems = h('button', { type: 'button', class: 'pill pill--gems', on: { click: () => { UI.show('shop'); NOA.ui.screens.shop.tab('gems'); } } }, h('span', { class: 'pi' }, '💎'), h('b', null, ''));
-      e.login = h('button', { type: 'button', class: 'btn-icon hud-btn gift-btn', 'aria-label': t('login.title'), title: t('login.title'), on: { click: () => NOA.ui.panels.loginModal() } }, '🎁');
-      e.settings = h('button', { type: 'button', class: 'btn-icon hud-btn', 'aria-label': t('settings.title'), on: { click: () => NOA.ui.settings.open() } }, '⚙️');
-      const hud = h('div', { class: 'hud' }, e.level, h('div', { class: 'grow' }, e.energy, e.coins, e.gems), e.settings);
-
-      e.bean = h('button', { type: 'button', class: 'bean', 'aria-label': t('bean.name'), on: { click: HUD.onBean } },
-        h('span', { class: 'sprout' }),
-        h('span', { class: 'bean-body' }, h('span', { class: 'eye l' }), h('span', { class: 'eye r' }), h('span', { class: 'blush' }), h('span', { class: 'mouth' })));
-      e.say = h('div', { class: 'bubble', 'aria-live': 'polite' }, '');
-      e.moon = h('button', { type: 'button', class: 'moon', on: { click: () => HUD.skyInfo() } }, '');
-      e.earth = h('button', { type: 'button', class: 'earth', 'aria-label': 'Earth', on: { click: () => HUD.skyInfo() } });
-      e.wx = h('button', { type: 'button', class: 'wx', on: { click: () => HUD.skyInfo() } }, '');
-      const scene = h('div', { class: 'scene' }, e.bean, e.say, e.login, h('div', { class: 'sky-icons' }, e.moon, e.earth, e.wx));
-      e.events = h('div', { class: 'sky-events' });
-      e.layer = h('div', { class: 'sky-layer' });
-      sky.append(h('div', { class: 'sky-fx' }), hud, scene, e.events, e.layer);
+      e.coins = h('button', { type: 'button', class: 'pill pill--coins', on: { click: () => { UI.show('shop', { tab: 'items' }); } } }, h('span', { class: 'pi' }, '🪙'), h('b', null, ''));
+      e.gems = h('button', { type: 'button', class: 'pill pill--gems', on: { click: () => { UI.show('shop', { tab: 'gems' }); } } }, h('span', { class: 'pi' }, '💎'), h('b', null, ''));
+      e.codex = h('button', { type: 'button', class: 'btn-icon hud-btn', 'aria-label': t('tab.codex'), title: t('tab.codex'), on: { click: () => UI.show('codex') } }, '📖');
+      e.settings = h('button', { type: 'button', class: 'btn-icon hud-btn', 'aria-label': t('settings.title'), title: t('settings.title'), on: { click: () => NOA.ui.settings.open() } }, '⚙️');
+      bar.append(e.level, h('div', { class: 'grow' }, e.coins, e.gems), e.codex, e.settings);
       HUD.update();
-      HUD.updateSky();
-      HUD.sayDefault();
     },
     update() {
       const e = HUD.els;
-      if (!e.level) return;
+      if (!e.level || !S()) return;
       const s = S();
       const need = NOA.progress.xpToNext(s.level);
       e.level.style.setProperty('--p', String(Math.min(1, s.xp / need)));
       e.level.querySelector('b').textContent = s.level;
       e.level.title = t('hud.xp', { xp: UI.num(s.xp), need: UI.num(need) });
-      e.energy.querySelector('b').textContent = UI.num(s.res.energy);
-      e.energy.title = UI.num(s.res.energy) + '/' + NOA.res.energyMax();
       e.coins.querySelector('b').textContent = UI.compact(s.res.coins);
       e.gems.querySelector('b').textContent = UI.compact(s.res.gems);
-      const dot = NOA.rewards.login.canClaim();
-      const old = e.login.querySelector('.dot');
-      if (dot && !old) e.login.append(h('span', { class: 'dot' }));
-      if (!dot && old) old.remove();
+      if (e.gift) {
+        const dot = NOA.rewards.login.canClaim();
+        const old = e.gift.querySelector('.dot');
+        if (dot && !old) e.gift.append(h('span', { class: 'dot' }));
+        if (!dot && old) old.remove();
+      }
     },
-    tick() {
+
+    /* ------------------------------------------------------------ map overlay (built by the farm map) */
+    mountOverlay(root) {
       const e = HUD.els;
-      if (!e.energy) return;
-      const ms = NOA.res.energyNextMs();
-      const tm = e.energy.querySelector('.pill-timer');
-      tm.hidden = !ms;
-      if (ms) tm.textContent = '+1 ' + UI.dur(ms);
-      e.energy.querySelector('b').textContent = UI.num(S().res.energy);
+      e.bean = h('button', { type: 'button', class: 'bean', 'aria-label': t('bean.name'), on: { click: HUD.onBean } },
+        h('span', { class: 'sprout' }),
+        h('span', { class: 'bean-body' }, h('span', { class: 'eye l' }), h('span', { class: 'eye r' }), h('span', { class: 'blush' }), h('span', { class: 'mouth' })));
+      e.say = h('div', { class: 'bubble', 'aria-live': 'polite', on: { click: () => e.say.classList.toggle('mini') } }, '');
+      e.wx = h('button', { type: 'button', class: 'sw-wx', on: { click: HUD.skyInfo } }, '');
+      e.moon = h('button', { type: 'button', class: 'sw-moon', on: { click: HUD.skyInfo } }, '');
+      e.earth = h('button', { type: 'button', class: 'earth', 'aria-label': 'Earth', on: { click: HUD.skyInfo } }, h('small', null, ''));
+      e.gift = h('button', { type: 'button', class: 'btn-icon gift-btn', 'aria-label': t('login.title'), title: t('login.title'), on: { click: () => NOA.ui.panels.loginModal() } }, '🎁');
+      e.events = h('div', { class: 'sky-events' });
+      e.layer = h('div', { class: 'sky-layer' });
+      root.append(
+        h('div', { class: 'bean-dock' }, e.bean, e.say),
+        h('div', { class: 'sky-widget' }, h('div', { class: 'sw-row' }, e.wx, e.moon, e.earth), e.gift, e.events),
+        e.layer);
+      HUD.update();
+      HUD.updateSky();
+      HUD.sayDefault();
+    },
+
+    tick() {
+      if (!HUD.els.level) return;
       HUD.skyTick();
     },
 
     /* ------------------------------------------------------------ sky */
     updateSky() {
       const e = HUD.els;
-      const sky = document.getElementById('sky');
       const st = NOA.world.sky();
-      sky.className = 'sky sky--' + st.phase + ' wx-' + st.weather;
-      e.moon.textContent = st.night ? st.moon : '☁️';
+      if (NOA.ui.screens.farm && NOA.ui.screens.farm.setSky) NOA.ui.screens.farm.setSky(st);
+      if (!e.wx || !e.wx.isConnected) return;
+      e.wx.textContent = st.weather === 'sunny' && st.night ? '✨' : WX_ICON[st.weather];
+      e.wx.setAttribute('aria-label', t('wx.' + st.weather));
+      e.wx.title = t('wx.' + st.weather);
+      e.moon.textContent = st.night ? st.moon : '';
+      e.moon.hidden = !st.night;
       e.moon.classList.toggle('full', st.fullMoon);
       e.moon.setAttribute('aria-label', st.fullMoon ? t('sky.fullMoon') : t('sky.night'));
       e.earth.style.setProperty('--earth', earthColor(st.earth));
       e.earth.title = t('sky.earth', { n: st.earth });
-      e.wx.textContent = { sunny: st.night ? '✨' : '☀️', cloudy: '⛅', rain: '🌧️', storm: '⛈️' }[st.weather];
-      e.wx.setAttribute('aria-label', t('wx.' + st.weather));
+      e.earth.querySelector('small').textContent = st.earth + '%';
       UI.clear(e.events);
       if (st.fullMoon) e.events.append(h('span', { class: 'ev' }, '🌕 ' + t('sky.fullMoon')));
       if (st.meteor) e.events.append(h('span', { class: 'ev' }, '🌠 ' + t('meteor.' + st.meteor.id) + (st.meteor.peak ? ' · ' + t('sky.meteorPeak') : '')));
@@ -113,16 +123,17 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (sig !== HUD._sky) {
         const prevWx = HUD._wx;
         HUD.updateSky();
-        if (prevWx && prevWx !== st.weather && st.weather === 'storm') HUD.say(t('bean.storm'));
-        if (st.fullMoon && !HUD._moonSaid) { HUD._moonSaid = true; HUD.say(t('bean.fullmoon')); }
+        if (prevWx && prevWx !== st.weather && st.weather === 'storm') HUD.say(t('bean.storm'), 9000);
+        if (st.fullMoon && !HUD._moonSaid) { HUD._moonSaid = true; HUD.say(t('bean.fullmoon'), 9000); }
       } else {
         // refresh mascot timers in the event chips about once per second
         const nowS = Math.floor(Date.now() / 1000);
         if (nowS !== HUD._sec) { HUD._sec = nowS; if (Object.keys(S().mascots.temp).length) HUD.updateSky(); }
       }
       HUD._wx = st.weather;
-      // shooting stars
-      if (st.meteor && NOA.ui.current === 'farm' && !document.hidden) {
+      const onMap = NOA.ui.current === 'farm' && !document.hidden;
+      // shooting stars over the farm
+      if (st.meteor && onMap) {
         const now = Date.now();
         if (!meteorTimer) meteorTimer = now + 4000;
         if (now >= meteorTimer) {
@@ -133,17 +144,17 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       }
       // idle firefly + idle tips
       const idle = (Date.now() - lastInput) / 1000;
-      if (NOA.FEATURES.secrets && !fireflyOut && idle > B().world.idleFirefly.idleSec && NOA.ui.current === 'farm' && !UI.hasModal()) HUD.spawnFirefly();
+      if (NOA.FEATURES.secrets && !fireflyOut && idle > B().world.idleFirefly.idleSec && onMap && !UI.hasModal()) HUD.spawnFirefly();
       if (Date.now() > idleTipAt && NOA.ui.story && NOA.ui.story.tutorialDone()) {
         idleTipAt = Date.now() + 26000 + Math.random() * 20000;
-        HUD.say(t('bean.idle' + (1 + Math.floor(Math.random() * 6))));
+        if (onMap) HUD.say(t('bean.idle' + (1 + Math.floor(Math.random() * IDLE_TIPS))), 9000);
       }
     },
     noteInput() { lastInput = Date.now(); },
     spawnMeteor() {
       const layer = HUD.els.layer;
-      if (!layer) return;
-      const m = h('button', { type: 'button', class: 'meteor', 'aria-label': t('sky.meteor'), style: { left: (55 + Math.random() * 40) + '%', top: (-4 + Math.random() * 30) + 'px' } });
+      if (!layer || !layer.isConnected) return;
+      const m = h('button', { type: 'button', class: 'meteor', 'aria-label': t('sky.meteor'), style: { left: (45 + Math.random() * 45) + '%', top: (10 + Math.random() * 60) + 'px' } });
       m.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const c = UI.center(m);
@@ -191,11 +202,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     },
 
     /* ------------------------------------------------------------ Bean */
-    say(text, ms) {
+    /** Bean talks on the farm map; elsewhere `important` messages fall back to a toast */
+    say(text, ms, important) {
       const e = HUD.els;
       if (!e.say) return;
       e.say.textContent = text;
-      e.say.classList.remove('pop');
+      e.say.classList.remove('pop', 'mini');
       void e.say.offsetWidth;
       e.say.classList.add('pop');
       e.bean.classList.remove('talk');
@@ -203,10 +215,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       e.bean.classList.add('talk');
       clearTimeout(sayTimer);
       if (ms) sayTimer = setTimeout(HUD.sayDefault, ms);
+      if (important && NOA.ui.current !== 'farm') UI.toast('🤖 ' + text);
     },
+    /** Tutorial tips stay open; otherwise Bean's bubble folds into a one-line chip so the map stays visible */
     sayDefault() {
+      if (!HUD.els.say) return;
       const tip = NOA.ui.story && NOA.ui.story.currentTip();
-      HUD.els.say.textContent = tip || t('bean.idle' + (1 + (S().level % 6)));
+      HUD.els.say.textContent = tip || t('bean.idle' + (1 + (S().level % IDLE_TIPS)));
+      HUD.els.say.classList.toggle('mini', !tip);
     },
     onBean() {
       NOA.audio.unlock();
@@ -220,6 +236,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         HUD.say(t('secret.bean.voice'), 12000);
       } else {
         HUD.sayDefault();
+        HUD.els.say.classList.remove('mini');
       }
     }
   };

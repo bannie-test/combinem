@@ -1,35 +1,39 @@
 /*
- * Game state shape, resources (coins / gems / energy / research points) and XP / levels.
+ * Game state shape (v2: farm map with zones), resources (coins / gems / research points) and XP / levels.
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
 (function () {
   'use strict';
   const B = () => NOA.BALANCE;
+  const C = () => NOA.CONTENT;
   const S = () => NOA.state;
+
+  const plot = (bed) => ({ bed, seed: null, start: 0, end: 0, fert: false });
 
   NOA.newState = function (lang) {
     const b = B();
-    const now = NOA.time ? Date.now() : 0;
-    const cells = b.board.cols * b.board.rows;
+    const now = Date.now();
     const state = {
       v: b.meta.saveVersion,
       createdAt: now,
       lang: lang || 'vi',
       farmName: '',
-      res: { coins: 500, gems: 30, energy: b.energy.start, rp: 0, energyAt: now },
+      res: { coins: 400, gems: 30, rp: 0 },
       xp: 0,
       level: 1,
       tickets: { sprout: 0, star: 0 },
-      boosters: { clover: 1, stabilizer: 0, stardust: 0, tonic: 1, loupe: 0 },
-      board: new Array(cells).fill(null),
-      storage: [],
-      storageCap: b.board.storageStart,
-      plots: [],
-      pens: [],
+      boosters: { clover: 1, stabilizer: 0, stardust: 0, tonic: 2, loupe: 0 },
+      barn: { items: {}, upgrades: 0 },
+      vault: { cells: new Array(b.storage.vaultStart).fill(null), pending: [] },
+      nursery: { cells: new Array(b.storage.nurseryStart).fill(null) },
+      fields: { crop: [], flower: [] },
+      pens: {},
+      factories: {},
       orders: [],
       orderRefillAt: 0,
       orderSwapAt: 0,
+      ship: { state: 'away', until: 0, crates: [], trips: 0 },
       labs: { greenhouse: { level: 1, slots: [] }, ranch: { level: 1, slots: [] } },
       mascots: { owned: {}, temp: {}, shrine: new Array(b.mascots.shrineSlots).fill(null) },
       discovered: { species: {}, genes: {}, hybrids: {}, products: {}, mascots: {}, maxLevel: {} },
@@ -45,39 +49,39 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       dev: { offsetMs: 0, timeScale: null, force: {}, payProvider: null, features: {} },
       ledger: [],
       purchases: { owned: {}, monthlyUntil: 0, monthlyLastDay: null },
-      stats: { merges: 0, harvests: 0, orders: 0, genesAwakened: 0, opens: 0, maxCombo: 0 },
-      seen: { intro: false }
+      stats: { merges: 0, breedMerges: 0, harvests: 0, orders: 0, genesAwakened: 0, opens: 0, maxCombo: 0, crafted: 0, ships: 0 },
+      seen: { intro: false },
+      camera: null
     };
-    for (let i = 0; i < b.farm.plotsStart; i++) state.plots.push({ seed: null, start: 0, end: 0, out: [] });
-    for (let i = 0; i < b.farm.pensStart; i++) state.pens.push({ animal: null, feed: 0, start: 0, end: 0, out: [] });
+    for (const bed of ['crop', 'flower']) {
+      for (let i = 0; i < b.fields[bed].start; i++) state.fields[bed].push(plot(bed));
+    }
+    for (const id in b.livestock.pens) state.pens[id] = { slots: new Array(b.livestock.pens[id].slotsStart).fill(null) };
+    for (const id in b.production.buildings) state.factories[id] = { slots: b.production.buildings[id].slotsStart, queue: [] };
     for (const id in b.gacha.boxes) state.gacha[id] = { opened: 0, since: {} };
     return state;
   };
+  NOA.newPlot = plot;
 
-  /** Place the two generators and starter items (called once for a new game). */
+  /** Starter kit for a brand-new farm */
   NOA.seedNewGame = function () {
-    const b = B();
-    const cols = b.board.cols, rows = b.board.rows;
     const s = S();
-    s.board[(rows - 1) * cols] = NOA.items.newGenerator('seedSack');
-    s.board[(rows - 1) * cols + cols - 1] = NOA.items.newGenerator('incubator');
-    for (const id in NOA.CONTENT.species) {
-      const sp = NOA.CONTENT.species[id];
-      if (!sp.hybrid && b.species[id].unlockLevel <= 1) s.discovered.species[id] = true;
+    const put = (grid, item) => { const i = s[grid].cells.indexOf(null); if (i >= 0) s[grid].cells[i] = item; };
+    ['rice', 'rice', 'rice', 'tomato', 'tomato'].forEach((sp) => put('vault', NOA.items.newBreed(sp, 1)));
+    put('nursery', NOA.items.newBreed('chicken', 1));
+    NOA.barn.add('rice_1', 3);
+    for (const id in C().species) {
+      const sp = C().species[id];
+      if (!sp.hybrid && B().species[id].unlockLevel <= 1) s.discovered.species[id] = true;
     }
   };
 
   /* ------------------------------------------------------------ resources */
   NOA.res = {
     get(k) { return S().res[k] || 0; },
-    energyMax() { return Math.round(NOA.mods.value('energy.max', B().energy.max, {})); },
     add(k, n) {
       if (!n) return;
       const r = S().res;
-      if (k === 'energy') {
-        const max = NOA.res.energyMax();
-        if (r.energy >= max && n > 0) r.energyAt = NOA.time.now();
-      }
       r[k] = Math.max(0, (r[k] || 0) + n);
       NOA.events.emit('res.changed', { k, n });
       NOA.save.schedule();
@@ -98,34 +102,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           for (const t in cost.tickets) S().tickets[t] -= cost.tickets[t];
           NOA.events.emit('res.changed', { k: 'tickets' });
         } else {
-          if (k === 'energy' && S().res.energy >= NOA.res.energyMax()) S().res.energyAt = NOA.time.now();
           S().res[k] -= cost[k];
           NOA.events.emit('res.changed', { k, n: -cost[k] });
         }
       }
       NOA.save.schedule();
       return true;
-    },
-    /** Regenerate energy from elapsed time (works offline too). */
-    tickEnergy() {
-      const r = S().res;
-      const max = NOA.res.energyMax();
-      const now = NOA.time.now();
-      if (r.energy >= max) { r.energyAt = now; return; }
-      const regenMs = NOA.time.dur(B().energy.regenSeconds) / NOA.mods.value('energy.regenMult', 1, {});
-      const elapsed = now - (r.energyAt || now);
-      if (elapsed >= regenMs) {
-        const gained = Math.floor(elapsed / regenMs);
-        r.energy = Math.min(max, r.energy + gained);
-        r.energyAt = r.energy >= max ? now : r.energyAt + gained * regenMs;
-        NOA.events.emit('res.changed', { k: 'energy', n: gained });
-      }
-    },
-    energyNextMs() {
-      const r = S().res;
-      if (r.energy >= NOA.res.energyMax()) return 0;
-      const regenMs = NOA.time.dur(B().energy.regenSeconds) / NOA.mods.value('energy.regenMult', 1, {});
-      return Math.max(0, regenMs - (NOA.time.now() - r.energyAt));
     }
   };
 
@@ -147,26 +129,33 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         const granted = NOA.rewards.grant(reward, 'level');
         const unlocks = NOA.progress.unlocksAt(s.level);
         unlocks.species.forEach((id) => { s.discovered.species[id] = true; });
+        if (NOA.farm) NOA.farm.grantFreePlots();
         NOA.events.emit('level.up', { level: s.level, granted, unlocks });
       }
       NOA.events.emit('xp.changed', { n });
       NOA.save.schedule();
     },
     unlocksAt(level) {
-      const out = { species: [], features: [], plots: 0, pens: 0 };
+      const out = { species: [], features: [], buildings: [], plots: 0, flowerBeds: 0 };
       const b = B();
       for (const id in NOA.CONTENT.species) {
         const eco = b.species[id];
         if (!NOA.CONTENT.species[id].hybrid && eco.unlockLevel === level) out.species.push(id);
       }
       for (const f in b.unlocks) if (b.unlocks[f] === level) out.features.push(f);
-      out.plots = b.farm.plotLevelReq.filter((l, i) => l === level && i >= b.farm.plotsStart).length;
-      out.pens = b.farm.penLevelReq.filter((l, i) => l === level && i >= b.farm.pensStart).length;
+      for (const id in b.production.buildings) if (b.production.buildings[id].unlockLevel === level && level > 1) out.buildings.push(id);
+      out.plots = b.fields.crop.levelReq.filter((l, i) => l === level && i >= b.fields.crop.start).length;
+      out.flowerBeds = b.fields.flower.levelReq.filter((l, i) => l === level && i >= b.fields.flower.start).length;
       return out;
     },
     isUnlocked(feature) {
       const lv = B().unlocks[feature];
       return lv == null || S().level >= lv;
+    },
+    speciesUnlocked(id) {
+      const sp = NOA.CONTENT.species[id];
+      if (sp.hybrid) return !!S().discovered.hybrids[id];
+      return B().species[id].unlockLevel <= S().level;
     }
   };
 })();

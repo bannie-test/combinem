@@ -1,101 +1,92 @@
 /*
- * NOA FARM — BẢNG CÂN BẰNG (Balance / Rates)
+ * NOA FARM — BẢNG CÂN BẰNG (Balance / Rates) · v0.2
  * ============================================================
- * MỌI tỉ lệ, xác suất, trọng số, giá, thời gian của game đều nằm ở file này.
+ * MỌI tỉ lệ, xác suất, trọng số, giá, thời gian, công thức chế biến của game đều nằm ở file này.
  * Code trong js/ KHÔNG chứa số "cứng" — luôn đọc từ NOA.BALANCE.
  *
  * Quy ước:
  *   - Xác suất viết dạng 0..1   (0.25 = 25%)
  *   - Trọng số (weights) là số tương đối, không cần cộng đủ 100
- *   - Thời gian tính bằng giây (Sec) hoặc phút (Min) như tên biến
+ *   - Thời gian tính bằng giây (Sec) hoặc phút (Min) như tên biến (giá trị prototype: ngắn để test nhanh)
  *   - Mảng "ByLevel" dùng index = cấp (index 0 bỏ trống)
  *
- * Sau khi sửa: mở game, bảng Dev > "Kiểm tra cấu hình" sẽ báo lỗi nếu có số sai.
+ * Sau khi sửa: mở game, ⚙️ > Công cụ Dev > "Kiểm tra cấu hình" sẽ báo lỗi nếu có số sai.
  * Muốn kiểm chứng tỉ lệ thực tế: chạy  `node tools/simulate.mjs`
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
 NOA.BALANCE = {
-  meta: { version: '0.1.0', saveVersion: 1 },
+  meta: { version: '0.2.0', saveVersion: 2 },
 
   /* ---------------------------------------------------------- THỜI GIAN */
   time: {
-    timeScale: 1,        // nhân MỌI thời lượng (trồng, chuồng, hồi năng lượng, linh vật). 0.1 = nhanh gấp 10
+    timeScale: 1,        // nhân MỌI thời lượng (trồng, chăn nuôi, chế biến, linh vật). 0.1 = nhanh gấp 10
     dayResetHour: 0,     // giờ đổi ngày cho phần thưởng đăng nhập (giờ máy người chơi)
     nightStartHour: 18,  // từ 18:00 ...
     nightEndHour: 6      // ... đến 05:59 là ban đêm
   },
 
-  /* ---------------------------------------------------------- NĂNG LƯỢNG */
-  energy: {
-    start: 100,
-    max: 100,
-    regenSeconds: 45     // hồi 1 năng lượng mỗi 45 giây
+  /* ---------------------------------------------------------- KHO CHỨA */
+  storage: {
+    barnStart: 100,                                         // Kho nông sản: tổng số món chứa được
+    barnUpgrade: { step: 25, max: 400, costBase: 400, costGrowth: 1.5 }, // mỗi lần nâng +25 chỗ, giá = costBase × costGrowth^lần
+    vaultStart: 24,      // Kho hạt giống (lưới merge hạt): số ô ban đầu
+    vaultMax: 48,
+    nurseryStart: 12,    // Chuồng ươm (lưới merge con giống): số ô ban đầu
+    nurseryMax: 30,
+    gridCols: 6,         // số cột của lưới merge
+    pendingSeedsMax: 12  // kho hạt đầy: hạt mới vào "giỏ chờ" tối đa chừng này, quá nữa thì mất
   },
 
-  /* ---------------------------------------------------------- BÀN MERGE & KHO */
-  board: {
-    cols: 7,
-    rows: 7,
-    storageStart: 16,    // số ô kho ban đầu
-    storageMax: 64
-  },
-
-  /* ---------------------------------------------------------- NÔNG TRẠI */
-  farm: {
-    plotsStart: 3,
-    plotsMax: 8,
-    plotCost:     [0, 0, 0, 600, 1500, 3500, 7000, 12000], // giá mở ô đất thứ i
-    plotLevelReq: [1, 1, 1, 3,   5,    7,    9,    11],
-    pensStart: 1,
-    pensMax: 5,
-    penCost:      [0, 900, 2500, 6000, 12000],
-    penLevelReq:  [1, 3,   5,    8,    11],
-    feedCapacity: 12     // số suất ăn tối đa trong 1 chuồng
+  /* ---------------------------------------------------------- RUỘNG & VƯỜN HOA */
+  // Ô thứ i (index) cần cấp levelReq[i] và giá cost[i] để mở. start = số ô có sẵn.
+  fields: {
+    crop:   { start: 4, max: 12,
+      cost:     [0, 0, 0, 0, 300, 600, 1000, 1600, 2500, 3800, 5500, 8000],
+      levelReq: [1, 1, 1, 1, 2,   3,   4,    5,    6,    8,    10,   12] },
+    flower: { start: 0, max: 6,
+      cost:     [0, 0, 800, 1600, 3200, 6000],
+      levelReq: [2, 2, 4,   6,    8,    10] }
   },
 
   /* ---------------------------------------------------------- LOÀI: GIÁ / THỜI GIAN / MỞ KHÓA */
-  // price      : giá bán 1 "đơn vị" sản phẩm cấp 1 (1★, không gen)
-  // growSec    : thời gian trồng hạt Lv1 (cây)       | cycleSec: 1 chu kỳ sản xuất Lv1 (vật nuôi)
-  // unlockLevel: cấp người chơi để loài xuất hiện trong máy tạo
-  // spawnWeight: trọng số xuất hiện trong máy tạo
+  // price      : giá bán 1 sản phẩm thô (1★, không gen)
+  // growSec    : thời gian trồng hạt Lv1   | cycleSec: 1 lứa sản xuất của vật nuôi Lv1
+  // unlockLevel: cấp người chơi mở loài    | seedPrice / buyPrice: giá mua hạt / con giống Lv1 ở Cửa hàng
   species: {
-    rice:       { price: 8,  growSec: 20, unlockLevel: 1, spawnWeight: 32 },
-    tomato:     { price: 10, growSec: 30, unlockLevel: 1, spawnWeight: 26 },
-    strawberry: { price: 14, growSec: 40, unlockLevel: 2, spawnWeight: 20 },
-    rose:       { price: 16, growSec: 50, unlockLevel: 3, spawnWeight: 16 },
-    potato:     { price: 12, growSec: 35, unlockLevel: 4, spawnWeight: 22 },
-    sunflower:  { price: 18, growSec: 60, unlockLevel: 5, spawnWeight: 14 },
-    chicken:    { price: 12, cycleSec: 30, unlockLevel: 1, spawnWeight: 34 },
-    cow:        { price: 16, cycleSec: 45, unlockLevel: 3, spawnWeight: 26 },
-    sheep:      { price: 20, cycleSec: 60, unlockLevel: 4, spawnWeight: 22 },
-    goat:       { price: 18, cycleSec: 50, unlockLevel: 6, spawnWeight: 20 },
-    bee:        { price: 24, cycleSec: 70, unlockLevel: 7, spawnWeight: 16 },
-    // Giống lai (chỉ có được từ Viện lai tạo). Giá = trung bình 2 loài bố mẹ × hệ số này
-    pomato:     { hybridPriceMult: 1.3, growSec: 45 },
-    rosaberry:  { hybridPriceMult: 1.3, growSec: 55 },
-    geep:       { hybridPriceMult: 1.3, cycleSec: 65 }
+    rice:       { price: 6,  growSec: 30,  unlockLevel: 1, seedPrice: 10 },
+    tomato:     { price: 9,  growSec: 45,  unlockLevel: 1, seedPrice: 15 },
+    strawberry: { price: 13, growSec: 60,  unlockLevel: 2, seedPrice: 25 },
+    potato:     { price: 11, growSec: 50,  unlockLevel: 3, seedPrice: 20 },
+    rose:       { price: 15, growSec: 70,  unlockLevel: 2, seedPrice: 30 },
+    sunflower:  { price: 16, growSec: 80,  unlockLevel: 4, seedPrice: 35 },
+    chicken:    { price: 11, cycleSec: 40, unlockLevel: 1, buyPrice: 60 },
+    cow:        { price: 16, cycleSec: 60, unlockLevel: 3, buyPrice: 150 },
+    bee:        { price: 24, cycleSec: 90, unlockLevel: 4, buyPrice: 250 },
+    sheep:      { price: 19, cycleSec: 75, unlockLevel: 5, buyPrice: 200 },
+    goat:       { price: 18, cycleSec: 70, unlockLevel: 6, buyPrice: 220 },
+    // Giống lai (chỉ có từ bàn lai chéo). Giá = trung bình 2 loài × hệ số
+    pomato:     { hybridPriceMult: 1.3, growSec: 60 },
+    rosaberry:  { hybridPriceMult: 1.3, growSec: 75 },
+    geep:       { hybridPriceMult: 1.3, cycleSec: 80 }
   },
 
-  /* ---------------------------------------------------------- MÁY TẠO (Generators) */
-  generators: {
-    seedSack:  { energy: 1 },      // Túi hạt giống: tốn 1 năng lượng / lần chạm
-    incubator: { energy: 2 },      // Lồng ấp: tốn 2 năng lượng / lần chạm
-    spawnStats: {                  // khoảng chỉ số khi vật phẩm mới sinh ra, theo cấp
+  /* ---------------------------------------------------------- HẠT / CON GIỐNG MỚI */
+  breeds: {
+    spawnStats: {                  // khoảng chỉ số khi hạt / con giống sinh ra (mua ở shop, quà...)
       1: [3, 14],
       2: [12, 28],
       3: [24, 42]
     },
-    carrierChance: 0.12            // tỉ lệ vật phẩm mới sinh mang GEN LẶN (ẩn, không hiển thị)
+    carrierChance: 0.12            // tỉ lệ mang GEN LẶN ẩn
   },
 
-  /* ---------------------------------------------------------- MERGE GIỐNG (cây & vật nuôi) */
+  /* ---------------------------------------------------------- MERGE (trong Kho hạt giống / Chuồng ươm) */
   merge: {
     maxLevel: 5,
     statCapByLevel: [0, 25, 45, 65, 85, 100], // trần chỉ số gốc theo cấp
     statGain: [4, 12],                        // con = trung bình bố mẹ + ngẫu nhiên [4..12]
-    // ĐỘT PHÁ: merge 2 vật Lv n có xác suất ra thẳng Lv n+2 (index = cấp bố mẹ)
-    breakthroughChance: [0, 0.07, 0.06, 0.05, 0, 0],
+    breakthroughChance: [0, 0.07, 0.06, 0.05, 0, 0], // ĐỘT PHÁ: 2 vật Lv n -> thẳng Lv n+2
     breakthroughStatBonus: 8,
     comboWindowMs: 2400,                      // merge liên tiếp trong khoảng này = combo (cao độ âm thanh tăng dần)
     maxChance: 0.95                           // trần của mọi xác suất sau khi cộng dồn bonus
@@ -103,97 +94,157 @@ NOA.BALANCE = {
 
   /* ---------------------------------------------------------- GEN (phẩm chất hiếm) */
   gene: {
-    // Thường + Thường -> xuất hiện gen mới (cộng thêm % từ Viện, linh vật, sự kiện)
-    spawnChance: 0.010,
+    spawnChance: 0.010,       // Thường + Thường -> gen mới xuất hiện (cộng thêm từ Viện, linh vật, sự kiện)
     keep: {
-      withNormal: 0.22,   // Cao cấp + Thường        -> giữ gen (THẤP)
-      sameGene:   0.88,   // Cao cấp + Cao cấp cùng gen -> giữ gen (CAO)
-      diffGene:   0.62    // Cao cấp + Cao cấp khác gen (không dung hợp) -> giữ 1 trong 2
+      withNormal: 0.22,       // Cao cấp + Thường         -> giữ gen (THẤP)
+      sameGene:   0.88,       // Cao cấp + Cao cấp cùng gen -> giữ gen (CAO)
+      diffGene:   0.62        // Cao cấp + Cao cấp khác gen (không dung hợp) -> giữ 1 trong 2
     },
-    purityLossWithNormal: 1,          // giữ được gen khi merge với vật thường: độ thuần -1 (tối thiểu 1)
-    lostGeneBecomesRecessive: true,   // gen bị mất -> chìm thành gen lặn, có thể thức tỉnh lại
-    // Cùng gen, cùng độ thuần p -> lên p+1 (index = p hiện tại)
+    purityLossWithNormal: 1,
+    lostGeneBecomesRecessive: true,
     purityUpChance: [0, 0.48, 0.34, 0.22, 0.12],
-    purityUpUnequalFactor: 0.5,       // 2 bên lệch độ thuần: tỉ lệ lên = tỉ lệ trên × 0.5
-    maxPurity: 5,                     // ◆5 = SIÊU GIỐNG THUẦN CHỦNG
-    fusion: {
-      chanceByTier: { 2: 0.22, 3: 0.09 }, // dung hợp ra gen tầng 2 / tầng 3
-      minPurity: 2                        // cả 2 gen phải đạt ◆2 trở lên mới dung hợp được
-    },
-    // Điểm cộng vào chỉ số "sở trường" của gen, theo độ thuần (index = ◆)
+    purityUpUnequalFactor: 0.5,
+    maxPurity: 5,
+    fusion: { chanceByTier: { 2: 0.22, 3: 0.09 }, minPurity: 2 },
     statBonusByPurity: [0, 8, 12, 17, 23, 32],
-    allFavorShare: 0.5,               // gen sở trường "all": mỗi chỉ số nhận 50% số điểm trên
-    // Hệ số giá theo TẦNG gen, theo độ thuần (index = ◆). ◆5 là Siêu giống
+    allFavorShare: 0.5,
     priceMult: {
       1: [1, 4, 6, 9, 14, 40],
       2: [1, 9, 13, 19, 28, 100],
       3: [1, 25, 35, 55, 85, 300]
     },
-    // Khi sinh gen mới: gen nào xuất hiện (trọng số)
     spawnWeights: {
       plant:  { solar: 30, lunar: 24, blaze: 24, crystal: 22 },
       animal: { dragon: 20, qilin: 30, tortoise: 30, phoenix: 20 }
     },
-    firstDiscoveryRP: 15,             // điểm nghiên cứu thưởng khi khám phá 1 gen lần đầu
-    firstGeneAtMerge: 5               // lần merge giống thứ 5 chắc chắn thức tỉnh gen đầu tiên (dạy người chơi mới). 0 = tắt
+    firstDiscoveryRP: 15,
+    firstGeneAtMerge: 3       // lần merge thứ 3 chắc chắn thức tỉnh gen đầu tiên (dạy người chơi mới). 0 = tắt
   },
 
-  /* ---------------------------------------------------------- GEN LẶN (ẩn — tính năng bí ẩn) */
+  /* ---------------------------------------------------------- GEN LẶN (ẩn) */
   recessive: {
-    expressChance: 0.25,       // 2 vật cùng mang 1 gen lặn -> 25% biểu hiện (đúng tỉ lệ Mendel 1/4)
-    inheritBothCarriers: 0.667,// không biểu hiện: con vẫn mang gen lặn với xác suất này (≈ 1/2 tổng)
-    inheritOneCarrier: 0.5     // chỉ 1 bên mang: con mang gen lặn 50%
+    expressChance: 0.25,       // 2 vật cùng mang 1 gen lặn -> 25% biểu hiện (tỉ lệ Mendel 1/4)
+    inheritBothCarriers: 0.667,
+    inheritOneCarrier: 0.5
   },
 
-  /* ---------------------------------------------------------- THU HOẠCH & SẢN XUẤT */
+  /* ---------------------------------------------------------- THU HOẠCH & PHỤ PHẨM */
   harvest: {
-    baseUnitsByLevel: [0, 1, 2, 4, 8, 16],     // sản lượng gốc (đơn vị) theo cấp giống
-    timeMultByLevel:  [0, 1, 1.5, 2.1, 2.7, 3.3],
+    baseUnitsByLevel: [0, 2, 4, 7, 12, 20],    // số nông sản / lần thu theo cấp hạt
+    timeMultByLevel:  [0, 1, 1.4, 1.9, 2.4, 3.0],
     yieldBonusPerPoint: 0.01,                  // mỗi điểm Năng suất: +1% sản lượng
     growthReductionPerPoint: 0.005,            // mỗi điểm Sinh trưởng: -0.5% thời gian
-    maxTimeReduction: 0.6,                     // giảm tối đa 60%
-    starThresholds: [0, 20, 40, 60, 80],       // Phẩm chất -> sao: <20 = 1★, 20+ = 2★ ... 80+ = 5★
-    starJitter: 8,                             // dao động ± điểm khi tính sao cho từng sản phẩm
-    geneProductChance: 0.6,                    // mỗi sản phẩm của giống có gen: 60% mang gen
-    geneRP: 1,                                 // mỗi sản phẩm có gen: +1 điểm nghiên cứu
-    naturalCloverChance: 0.002,                // nhặt được Cỏ bốn lá khi thu hoạch (bí ẩn)
-    maxProductTier: 3,
-    // Gộp sản lượng thành sản phẩm cấp cao để bàn không bị ngập:
-    // chỉ gộp thành cấp 2 khi 1 lần thu hoạch có >= 4 đơn vị, cấp 3 khi >= 8 đơn vị
-    packFromUnits: { 2: 4, 3: 8 }
+    maxTimeReduction: 0.6,
+    starThresholds: [0, 20, 40, 60, 80],       // Phẩm chất -> sao
+    starJitter: 8,
+    geneProductChance: 0.5,                    // mỗi nông sản của giống có gen: 50% mang gen
+    geneRP: 1,
+    naturalCloverChance: 0.002,
+    // PHỤ PHẨM 1: HẠT GIỐNG thế hệ sau (đi vào Kho hạt giống)
+    seeds: {
+      countByLevel: [0, 1, 1, 2, 2, 3],        // số hạt / lần thu theo cấp cây mẹ
+      extraChance: 0.3,                        // thêm 1 hạt với xác suất này (+ theo Năng suất)
+      extraPerYieldPoint: 0.004,
+      levelDrop: 2,                            // hạt con = cấp mẹ - 2 (tối thiểu Lv1): Lv5 cho hạt Lv3
+      inheritRatio: 0.75,                      // chỉ số con ≈ 75% chỉ số mẹ (± đột biến), không vượt trần cấp
+      mutation: 5,                             // dao động ± điểm khi di truyền
+      geneInherit: 0.35,                       // mẹ có gen: mỗi hạt con 35% mang gen (◆ -1)
+      carrierFromGene: 0.5,                    // không mang gen thì 50% mang gen đó dạng LẶN
+      carrierInherit: 0.5                      // mẹ mang gen lặn: con mang tiếp 50%
+    }
+  },
+  // PHỤ PHẨM 2: vật liệu theo loài (content.species.byproduct) — số lượng = base + floor(nông sản / perUnits)
+  byproducts: {
+    straw:  { base: 1, perUnits: 3 },          // 🧹 Rơm (từ lúa) — thức ăn của bò, cừu, dê
+    pollen: { base: 1, perUnits: 3 }           // 🌼 Phấn hoa (từ hoa) — thức ăn của ong
+  },
+  fertilizer: { unitsMult: 1.5, extraSeeds: 1 }, // 💩 bón phân: lần thu tới ×1.5 nông sản, +1 hạt
+
+  /* ---------------------------------------------------------- CHĂN NUÔI */
+  livestock: {
+    pens: {   // ô nuôi ban đầu / tối đa / giá mở ô thứ i
+      coop:      { slotsStart: 2, slotsMax: 6, slotCost: [0, 0, 400, 900, 1800, 3500] },
+      cowshed:   { slotsStart: 1, slotsMax: 5, slotCost: [0, 800, 1600, 3000, 5000] },
+      apiary:    { slotsStart: 1, slotsMax: 4, slotCost: [0, 1200, 2500, 5000] },
+      sheepfold: { slotsStart: 1, slotsMax: 5, slotCost: [0, 1000, 2000, 3800, 6000] },
+      goatpen:   { slotsStart: 1, slotsMax: 5, slotCost: [0, 1100, 2200, 4000, 6500] }
+    },
+    offspringChance: 0.14,       // mỗi lứa: tỉ lệ đẻ CON NON (đi vào Chuồng ươm)
+    offspringPerLevel: 0.02,     // + mỗi cấp của con mẹ
+    manureChance: 0.6            // bò, dê: tỉ lệ ra 💩 phân bón mỗi lứa
   },
 
-  /* ---------------------------------------------------------- SẢN PHẨM */
+  /* ---------------------------------------------------------- CHẾ BIẾN (Township-style) */
+  production: {
+    buildings: {      // mở ở cấp / số ô hàng chờ ban đầu / tối đa / giá mở ô thứ i
+      mill:    { unlockLevel: 1, slotsStart: 2, slotsMax: 5, slotCost: [0, 0, 300, 800, 2000] },
+      kitchen: { unlockLevel: 3, slotsStart: 2, slotsMax: 5, slotCost: [0, 0, 500, 1200, 2800] },
+      dairy:   { unlockLevel: 4, slotsStart: 2, slotsMax: 5, slotCost: [0, 0, 600, 1500, 3200] },
+      craft:   { unlockLevel: 5, slotsStart: 2, slotsMax: 5, slotCost: [0, 0, 700, 1700, 3600] }
+    },
+    valueMarkup: 1.3,          // giá thành phẩm = tổng giá nguyên liệu × 1.3
+    starUpChance: 0.15,        // thành phẩm có 15% được +1★
+    xpPerSecond: 0.1           // XP khi thu thành phẩm = thời gian chế biến × 0.1
+  },
+  // Công thức: sản phẩm = { building, inputs: { nguyên liệu: số lượng }, timeSec }
+  recipes: {
+    rice_2:       { building: 'mill',    inputs: { rice_1: 3 },                          timeSec: 40 },
+    sunflower_2:  { building: 'mill',    inputs: { sunflower_1: 3 },                     timeSec: 45 },
+    rice_3:       { building: 'kitchen', inputs: { rice_2: 2 },                          timeSec: 60 },
+    tomato_2:     { building: 'kitchen', inputs: { tomato_1: 3 },                        timeSec: 50 },
+    potato_2:     { building: 'kitchen', inputs: { potato_1: 3 },                        timeSec: 50 },
+    chicken_2:    { building: 'kitchen', inputs: { chicken_1: 2 },                       timeSec: 40 },
+    strawberry_2: { building: 'kitchen', inputs: { strawberry_1: 2, cow_1: 1 },          timeSec: 50 },
+    potato_3:     { building: 'kitchen', inputs: { potato_2: 2, cow_1: 1 },              timeSec: 80 },
+    chicken_3:    { building: 'kitchen', inputs: { chicken_1: 3, cow_1: 1 },             timeSec: 90 },
+    sunflower_3:  { building: 'kitchen', inputs: { sunflower_2: 2, chicken_1: 1 },       timeSec: 90 },
+    bee_3:        { building: 'kitchen', inputs: { bee_1: 1, rice_2: 1, chicken_1: 1 },  timeSec: 90 },
+    tomato_3:     { building: 'kitchen', inputs: { tomato_2: 2, goat_2: 1 },             timeSec: 100 },
+    strawberry_3: { building: 'kitchen', inputs: { strawberry_2: 2, cow_2: 1 },          timeSec: 110 },
+    goat_3:       { building: 'kitchen', inputs: { goat_2: 1, rice_2: 2 },               timeSec: 100 },
+    cow_2:        { building: 'dairy',   inputs: { cow_1: 3 },                           timeSec: 60 },
+    cow_3:        { building: 'dairy',   inputs: { cow_1: 2, bee_1: 1 },                 timeSec: 90 },
+    goat_2:       { building: 'dairy',   inputs: { goat_1: 3 },                          timeSec: 70 },
+    rose_2:       { building: 'craft',   inputs: { rose_1: 3 },                          timeSec: 45 },
+    bee_2:        { building: 'craft',   inputs: { bee_1: 2 },                           timeSec: 60 },
+    rose_3:       { building: 'craft',   inputs: { rose_2: 2, bee_2: 1 },                timeSec: 100 },
+    sheep_2:      { building: 'craft',   inputs: { sheep_1: 3 },                         timeSec: 60 },
+    sheep_3:      { building: 'craft',   inputs: { sheep_2: 2, sheep_1: 1 },             timeSec: 120 }
+  },
+
+  /* ---------------------------------------------------------- SẢN PHẨM & VẬT LIỆU */
   product: {
-    tierUnits:      [0, 1, 2, 4],              // sản phẩm cấp 2 = 2 đơn vị, cấp 3 = 4 đơn vị
-    tierValueBonus: [0, 1, 1.1, 1.25],         // thưởng giá trị khi chế biến lên cấp
-    starPriceMult:  [0, 1, 1.25, 1.6, 2.1, 2.8],
-    starUpChanceOnMerge: 0.2                   // merge 2 sản phẩm: 20% sao +1
+    starPriceMult: [0, 1, 1.25, 1.6, 2.1, 2.8]
+  },
+  materials: {                 // giá bán vật liệu
+    straw:  { price: 2 },
+    pollen: { price: 3 },
+    manure: { price: 4 }
   },
 
   /* ---------------------------------------------------------- BÁN HÀNG & THỊ TRƯỜNG */
   market: {
     saturationStep: 0.05,      // mỗi lần bán cùng 1 loại trong ngày: giá -5%
-    saturationFloor: 0.45,     // giá thấp nhất còn 45%
-    seedSellBase: 4,           // giá bán hạt / con giống = seedSellBase × levelMult[cấp] × hệ số gen
+    saturationFloor: 0.45,
+    seedSellBase: 3,           // giá bán hạt / con giống = seedSellBase × levelMult[cấp] × hệ số gen
     seedLevelMult: [0, 1, 2.5, 6, 14, 32],
-    confirmSellMinLevel: 4     // bán vật phẩm từ cấp này trở lên (hoặc có gen) phải xác nhận
+    confirmSellMinLevel: 4
   },
 
-  /* ---------------------------------------------------------- ĐƠN HÀNG */
+  /* ---------------------------------------------------------- BẢNG ĐƠN HÀNG */
   orders: {
-    slots: 4,
-    refillDelaySec: 3,
-    swapCooldownSec: 45,
+    slots: 6,
+    refillDelaySec: 6,
+    swapCooldownSec: 60,
     linesByLevel: [ { level: 1, max: 1 }, { level: 3, max: 2 }, { level: 6, max: 3 } ],
-    countRange: [1, 3],
+    countByTier: { 1: [2, 5], 2: [1, 3], 3: [1, 2] },
     tierWeightsByLevel: [
       { level: 1, weights: [100, 0, 0] },
-      { level: 3, weights: [70, 30, 0] },
-      { level: 6, weights: [50, 35, 15] },
-      { level: 9, weights: [40, 38, 22] }
+      { level: 2, weights: [75, 25, 0] },
+      { level: 4, weights: [55, 35, 10] },
+      { level: 7, weights: [40, 38, 22] }
     ],
-    rewardMult: 1.5,           // thưởng = giá trị hàng giao × hệ số này
+    rewardMult: 1.5,
     xpPerCoin: 0.15,
     minXP: 5,
     vip: {
@@ -203,140 +254,145 @@ NOA.BALANCE = {
       rpRange: [4, 12],
       gemChance: 0.35,
       gemRange: [2, 6],
-      requireGeneChance: 0.6,  // VIP: 60% yêu cầu hàng có gen, còn lại yêu cầu tối thiểu 3★
+      requireGeneChance: 0.6,
       minStars: 3
-    },
-    earth: {                   // Đơn "Gửi về Trái Đất" (cốt truyện)
-      unlockLevel: 3,
-      chance: 0.2,
-      progress: 2,             // mỗi đơn +2% tiến độ hồi sinh Trái Đất
-      rp: 3
     }
+  },
+
+  /* ---------------------------------------------------------- TÀU ONG VÀNG (gửi hàng về Trái Đất — kiểu tàu hỏa Township) */
+  ship: {
+    unlockLevel: 3,
+    dockMinutes: 8,            // tàu đậu chờ 8 phút
+    awayMinutes: 4,            // bay về Trái Đất 4 phút rồi quay lại
+    crates: 3,
+    countRange: [2, 4],
+    tierWeights: [70, 30, 0],
+    rewardMult: 1.8,
+    allBonus: { gems: 5, rp: 10 },   // lấp đủ mọi thùng
+    earthProgress: 3                 // +3% hồi sinh Trái Đất mỗi chuyến đầy
   },
 
   /* ---------------------------------------------------------- KINH NGHIỆM & CẤP */
   level: {
-    // XP cần để lên từ cấp L lên L+1 (index = L)
     xpToNext: [0, 40, 80, 130, 190, 260, 340, 430, 530, 640, 760, 890, 1030, 1180, 1340],
-    xpGrowthAfterTable: 170,   // sau bảng: mỗi cấp cần thêm 170 XP so với cấp trước
+    xpGrowthAfterTable: 170,
     maxLevel: 60
   },
   xp: {
-    mergePerLevel: 1,          // merge vật cấp L: +L XP
+    mergePerLevel: 1,
     harvestPerUnit: 0.5,
-    discovery: 20,             // khám phá gen / giống mới
+    discovery: 20,
     hybrid: 30,
     labUpgrade: 25
   },
 
-  /* ---------------------------------------------------------- MỞ KHÓA TÍNH NĂNG (theo cấp người chơi) */
+  /* ---------------------------------------------------------- MỞ KHÓA TÍNH NĂNG */
   unlocks: {
+    flowers: 2,     // Vườn hoa
     blindbox: 2,
-    ranch: 3,       // Trại nghiên cứu vật nuôi
-    shrine: 3,      // Đền linh vật
+    ranch: 1,       // Trại nghiên cứu (Chuồng ươm)
+    ship: 3,        // Tàu Ong Vàng
+    shrine: 3,
     vipOrders: 4,
-    hybrid: 5,      // lai chéo 2 loài (cần thêm Viện cấp 2)
+    hybrid: 5,
     starBox: 5
   },
 
   /* ---------------------------------------------------------- VIỆN NGHIÊN CỨU */
-  // Áp dụng cho cả 🌱 Nhà kính lai tạo (cây) và 🐾 Trại nghiên cứu vật nuôi (động vật), tiến độ tách riêng.
-  // success     : cộng vào tỉ lệ giữ gen / lên độ thuần / dung hợp
-  // spawnAdd    : cộng vào tỉ lệ xuất hiện gen mới
-  // breakAdd    : cộng vào tỉ lệ Đột phá
-  // slots       : số ô lai chéo chạy song song
-  // discoveryAdd: cộng vào tỉ lệ lai thành công giống mới
-  // purityCap   : độ thuần tối đa đạt được     | fusionTier: tầng gen dung hợp tối đa
-  // lv2Spawn    : tỉ lệ máy tạo ra thẳng vật phẩm Lv2
   labs: {
     maxLevel: 10,
     levels: [
       null,
-      { cost: null,                    success: 0.00, spawnAdd: 0.000, breakAdd: 0.000, slots: 0, discoveryAdd: 0.00, purityCap: 2, fusionTier: 1, lv2Spawn: 0.00 },
-      { cost: { coins: 600,   rp: 8 },   success: 0.02, spawnAdd: 0.003, breakAdd: 0.005, slots: 1, discoveryAdd: 0.00, purityCap: 3, fusionTier: 1, lv2Spawn: 0.03 },
-      { cost: { coins: 1600,  rp: 20 },  success: 0.04, spawnAdd: 0.006, breakAdd: 0.010, slots: 1, discoveryAdd: 0.03, purityCap: 3, fusionTier: 2, lv2Spawn: 0.05 },
-      { cost: { coins: 3200,  rp: 36 },  success: 0.06, spawnAdd: 0.009, breakAdd: 0.015, slots: 1, discoveryAdd: 0.06, purityCap: 4, fusionTier: 2, lv2Spawn: 0.07 },
-      { cost: { coins: 5600,  rp: 56 },  success: 0.08, spawnAdd: 0.012, breakAdd: 0.020, slots: 2, discoveryAdd: 0.09, purityCap: 4, fusionTier: 2, lv2Spawn: 0.09 },
-      { cost: { coins: 9000,  rp: 80 },  success: 0.10, spawnAdd: 0.016, breakAdd: 0.025, slots: 2, discoveryAdd: 0.12, purityCap: 5, fusionTier: 3, lv2Spawn: 0.11 },
-      { cost: { coins: 13500, rp: 110 }, success: 0.12, spawnAdd: 0.020, breakAdd: 0.030, slots: 2, discoveryAdd: 0.15, purityCap: 5, fusionTier: 3, lv2Spawn: 0.13 },
-      { cost: { coins: 19500, rp: 150 }, success: 0.14, spawnAdd: 0.025, breakAdd: 0.035, slots: 3, discoveryAdd: 0.18, purityCap: 5, fusionTier: 3, lv2Spawn: 0.15 },
-      { cost: { coins: 27000, rp: 200 }, success: 0.17, spawnAdd: 0.030, breakAdd: 0.040, slots: 3, discoveryAdd: 0.22, purityCap: 5, fusionTier: 3, lv2Spawn: 0.18 },
-      { cost: { coins: 38000, rp: 270 }, success: 0.20, spawnAdd: 0.040, breakAdd: 0.050, slots: 4, discoveryAdd: 0.27, purityCap: 5, fusionTier: 3, lv2Spawn: 0.22 }
+      { cost: null,                      success: 0.00, spawnAdd: 0.000, breakAdd: 0.000, slots: 0, discoveryAdd: 0.00, purityCap: 2, fusionTier: 1 },
+      { cost: { coins: 600,   rp: 8 },   success: 0.02, spawnAdd: 0.003, breakAdd: 0.005, slots: 1, discoveryAdd: 0.00, purityCap: 3, fusionTier: 1 },
+      { cost: { coins: 1600,  rp: 20 },  success: 0.04, spawnAdd: 0.006, breakAdd: 0.010, slots: 1, discoveryAdd: 0.03, purityCap: 3, fusionTier: 2 },
+      { cost: { coins: 3200,  rp: 36 },  success: 0.06, spawnAdd: 0.009, breakAdd: 0.015, slots: 1, discoveryAdd: 0.06, purityCap: 4, fusionTier: 2 },
+      { cost: { coins: 5600,  rp: 56 },  success: 0.08, spawnAdd: 0.012, breakAdd: 0.020, slots: 2, discoveryAdd: 0.09, purityCap: 4, fusionTier: 2 },
+      { cost: { coins: 9000,  rp: 80 },  success: 0.10, spawnAdd: 0.016, breakAdd: 0.025, slots: 2, discoveryAdd: 0.12, purityCap: 5, fusionTier: 3 },
+      { cost: { coins: 13500, rp: 110 }, success: 0.12, spawnAdd: 0.020, breakAdd: 0.030, slots: 2, discoveryAdd: 0.15, purityCap: 5, fusionTier: 3 },
+      { cost: { coins: 19500, rp: 150 }, success: 0.14, spawnAdd: 0.025, breakAdd: 0.035, slots: 3, discoveryAdd: 0.18, purityCap: 5, fusionTier: 3 },
+      { cost: { coins: 27000, rp: 200 }, success: 0.17, spawnAdd: 0.030, breakAdd: 0.040, slots: 3, discoveryAdd: 0.22, purityCap: 5, fusionTier: 3 },
+      { cost: { coins: 38000, rp: 270 }, success: 0.20, spawnAdd: 0.040, breakAdd: 0.050, slots: 4, discoveryAdd: 0.27, purityCap: 5, fusionTier: 3 }
     ]
   },
 
-  /* ---------------------------------------------------------- LAI CHÉO 2 LOÀI (Viện) */
+  /* ---------------------------------------------------------- LAI CHÉO 2 LOÀI (bàn nghiên cứu) */
   hybrid: {
-    durationSec: 90,          // thời gian lai
-    costCoins: 200,           // phí mỗi lần lai
-    baseDiscovery: 0.35,      // tỉ lệ thành công với cặp loài TƯƠNG THÍCH (cộng discoveryAdd của Viện)
-    vigorBonus: 10,           // "Ưu thế lai": +10 điểm mọi chỉ số cho giống lai
-    failRefundRP: 3,          // thất bại: hoàn điểm nghiên cứu
-    // Thất bại: trả lại vật bố/mẹ có cấp cao hơn, vật còn lại mất
-    hybridSpawnWeight: 6      // sau khi khám phá, giống lai xuất hiện trong máy tạo với trọng số này
+    durationSec: 90,
+    costCoins: 200,
+    baseDiscovery: 0.35,
+    vigorBonus: 10,           // "Ưu thế lai": +10 điểm mọi chỉ số
+    failRefundRP: 3
   },
 
   /* ---------------------------------------------------------- PHẦN THƯỞNG ĐĂNG NHẬP (7 ngày, lặp lại) */
-  // Kiểu phần thưởng dùng chung: coins, gems, energy, rp, tickets{sprout,star}, boosters{clover,stabilizer,stardust,tonic,loupe}
+  // Kiểu phần thưởng: coins, gems, rp, tickets{sprout,star}, boosters{...}, materials{straw,pollen,manure},
+  //                   products{id:n}, seeds:[{species,level}], animals:[{species,level}]
   login: {
-    resetOnMiss: false,       // false = bỏ lỡ ngày không bị reset chuỗi
+    resetOnMiss: false,
     days: [
       { coins: 200 },
-      { energy: 30, boosters: { clover: 1 } },
+      { materials: { manure: 3 }, boosters: { clover: 1 } },
       { tickets: { sprout: 1 } },
       { coins: 400, rp: 15 },
       { gems: 15 },
-      { energy: 40, boosters: { stabilizer: 1 } },
+      { materials: { straw: 10 }, boosters: { stabilizer: 1 } },
       { gems: 30, tickets: { star: 1 } }
     ]
   },
 
   /* ---------------------------------------------------------- PHẦN THƯỞNG LÊN CẤP */
   levelRewards: {
-    2:  { coins: 300,  gems: 10, tickets: { sprout: 1 } },
-    3:  { coins: 400,  energy: 30, boosters: { clover: 1 } },
-    4:  { coins: 500,  rp: 10, boosters: { stabilizer: 1 } },
+    2:  { coins: 300,  gems: 10, tickets: { sprout: 1 }, seeds: [{ species: 'rose', level: 1 }, { species: 'rose', level: 1 }] },
+    3:  { coins: 400,  materials: { straw: 10 }, animals: [{ species: 'cow', level: 1 }] },
+    4:  { coins: 500,  rp: 10, boosters: { stabilizer: 1 }, materials: { pollen: 6 } },
     5:  { coins: 700,  gems: 20, tickets: { star: 1 } },
-    6:  { coins: 800,  energy: 40, boosters: { stardust: 1 } },
+    6:  { coins: 800,  materials: { manure: 5 }, boosters: { stardust: 1 } },
     7:  { coins: 1000, rp: 20, tickets: { sprout: 2 } },
     8:  { coins: 1200, gems: 25 },
     9:  { coins: 1400, boosters: { clover: 2, tonic: 2 } },
     10: { coins: 2000, gems: 40, tickets: { star: 2 } }
   },
-  // Cấp cao hơn bảng trên: tính theo công thức
-  levelRewardFormula: { coinsBase: 1000, coinsPerLevel: 150, gems: 10, energy: 30, starTicketEvery: 5 },
+  levelRewardFormula: { coinsBase: 1000, coinsPerLevel: 150, gems: 10, manure: 3, starTicketEvery: 5 },
 
   /* ---------------------------------------------------------- VẬT PHẨM HỖ TRỢ / MAY MẮN */
   boosters: {
     clover:     { geneKeepAdd: 0.15, purityUpAdd: 0.10, fusionAdd: 0.08, spawnMult: 2.5, breakthroughAdd: 0.03 },
-    stabilizer: { noGeneLoss: true, noPurityLoss: true },     // Bình ổn gen: không mất gen, không giảm độ thuần
-    stardust:   { breakthroughAdd: 0.10, fusionAdd: 0.10 },   // Bụi sao
-    tonic:      {},                                           // Thuốc tăng trưởng: xong ngay 1 ô đất / chuồng
-    loupe:      {}                                            // Kính lúp gen: soi gen lặn
+    stabilizer: { noGeneLoss: true, noPurityLoss: true },
+    stardust:   { breakthroughAdd: 0.10, fusionAdd: 0.10 },
+    tonic:      {},   // Thuốc tăng trưởng: xong ngay 1 ô ruộng / 1 con vật / 1 lượt chế biến
+    loupe:      {}    // Kính lúp gen: soi gen lặn
   },
 
   /* ---------------------------------------------------------- CỬA HÀNG */
   // price: { coins } = Xu (kiếm trong game) | { gems } = Ngọc (từ nạp tiền / phần thưởng)
+  // Hạt giống & con giống Lv1 bán theo species.seedPrice / buyPrice ở trên
   shop: {
     items: [
-      { id: 'energy_50',    grant: { energy: 50 },                 price: { gems: 20 } },
-      { id: 'energy_small', grant: { energy: 15 },                 price: { coins: 600 } },
+      { id: 'manure_5',     grant: { materials: { manure: 5 } },   price: { coins: 300 } },
+      { id: 'straw_10',     grant: { materials: { straw: 10 } },   price: { coins: 150 } },
+      { id: 'pollen_10',    grant: { materials: { pollen: 10 } },  price: { coins: 220 } },
       { id: 'clover_1',     grant: { boosters: { clover: 1 } },     price: { coins: 900 } },
       { id: 'clover_5',     grant: { boosters: { clover: 5 } },     price: { gems: 30 } },
       { id: 'stabilizer_1', grant: { boosters: { stabilizer: 1 } }, price: { gems: 25 } },
       { id: 'stardust_1',   grant: { boosters: { stardust: 1 } },   price: { coins: 1500 } },
       { id: 'tonic_3',      grant: { boosters: { tonic: 3 } },      price: { gems: 12 } },
       { id: 'loupe_1',      grant: { boosters: { loupe: 1 } },      price: { coins: 2500 } },
-      { id: 'storage_8',    grant: { storage: 8 },                  price: { gems: 40 } },
+      { id: 'vault_6',      grant: { vault: 6 },                    price: { gems: 40 } },
+      { id: 'nursery_3',    grant: { nursery: 3 },                  price: { gems: 30 } },
       { id: 'ticket_star',  grant: { tickets: { star: 1 } },        price: { gems: 55 } }
     ],
-    exchange: { gems: 10, coins: 800 }   // đổi 10 Ngọc -> 800 Xu
+    exchange: { gems: 10, coins: 800 }
   },
 
   /* ---------------------------------------------------------- BLINDBOX (gacha) */
   gacha: {
     rarityOrder: ['common', 'rare', 'epic', 'legendary', 'mythic'],
-    // Định nghĩa phần thưởng (dùng chung cho các hộp)
+    // Hạt / con giống trong hộp: chọn loài (đã mở khóa) theo trọng số này
+    speciesWeights: {
+      rice: 30, tomato: 26, strawberry: 20, potato: 20, rose: 16, sunflower: 14,
+      chicken: 30, cow: 22, bee: 14, sheep: 16, goat: 16
+    },
     rewards: {
       seed_lv1:      { type: 'seed',   level: [1, 1] },
       seed_lv2:      { type: 'seed',   level: [2, 2] },
@@ -359,30 +415,30 @@ NOA.BALANCE = {
       stardust:      { type: 'booster', id: 'stardust',   qty: 1 },
       tonic:         { type: 'booster', id: 'tonic',      qty: 2 },
       loupe:         { type: 'booster', id: 'loupe',      qty: 1 },
+      manure_s:      { type: 'material', id: 'manure', qty: 3 },
+      straw_m:       { type: 'material', id: 'straw',  qty: 10 },
       coins_s:       { type: 'currency', coins: 150 },
       gems_s:        { type: 'currency', gems: 10 },
-      energy_s:      { type: 'currency', energy: 10 },
-      energy_m:      { type: 'currency', energy: 25 },
       mascot_temp:   { type: 'mascot', pool: 'temp' },
       mascot_perm:   { type: 'mascot', pool: 'perm' },
       mascot_rare:   { type: 'mascot', pool: 'permRare' }
     },
     boxes: {
-      sprout: {                                   // 🌱 Hộp Mầm Xanh
+      sprout: {
         cost: { coins: 300 },
-        ticket: 'sprout',                         // dùng vé thay cho giá
-        multi: { count: 10, costMult: 9, guaranteeMinRarity: 'epic' }, // mở 10: giá ×9, chắc chắn ≥1 Sử thi
+        ticket: 'sprout',
+        multi: { count: 10, costMult: 9, guaranteeMinRarity: 'epic' },
         rarityWeights: { common: 6200, rare: 2800, epic: 850, legendary: 150, mythic: 0 },
-        pity: { epic: 10, legendary: 60 },        // tối đa 10 lần có Sử thi+, 60 lần có Huyền thoại+
+        pity: { epic: 10, legendary: 60 },
         pool: {
-          common:    { seed_lv1: 38, animal_lv1: 30, seed_lv2: 16, coins_s: 10, energy_s: 6 },
-          rare:      { seed_lv3: 22, animal_lv2: 26, clover: 20, tonic: 16, energy_m: 16 },
+          common:    { seed_lv1: 38, animal_lv1: 26, seed_lv2: 16, coins_s: 10, manure_s: 10 },
+          rare:      { seed_lv3: 22, animal_lv2: 26, clover: 20, tonic: 16, straw_m: 16 },
           epic:      { seed_gene1: 32, animal_gene1: 26, mascot_temp: 28, stabilizer: 14 },
           legendary: { mascot_perm: 60, seed_fusion: 20, animal_fusion: 20 },
           mythic:    {}
         }
       },
-      star: {                                     // 🌠 Hộp Tinh Tú
+      star: {
         cost: { gems: 60 },
         ticket: 'star',
         multi: { count: 10, costMult: 9, guaranteeMinRarity: 'epic' },
@@ -397,34 +453,29 @@ NOA.BALANCE = {
         }
       }
     },
-    // Trọng số linh vật trong từng nhóm
     mascotPools: {
       temp:     { jade_rabbit: 25, ladybug: 25, squirrel: 20, owl: 15, worker_bee: 15 },
       perm:     { fortune_cat: 24, rain_toad: 22, golden_buffalo: 22, farm_dog: 22, white_swan: 6, golden_carp: 4 },
       permRare: { white_swan: 50, golden_carp: 50 }
     },
-    duplicatePerm: { maxStars: 5, overflowGems: 20 },  // trùng linh vật vĩnh viễn: +1 sao; đủ 5 sao -> đổi Ngọc
-    weightScale: 10000                                // (chỉ để hiển thị) tổng trọng số chuẩn
+    duplicatePerm: { maxStars: 5, overflowGems: 20 }
   },
 
   /* ---------------------------------------------------------- LINH VẬT */
-  // Tạm thời: kích hoạt ngay khi nhận, hết hạn sau durationMin (trùng thì cộng dồn thời gian)
-  // Vĩnh viễn: đặt vào Đền linh vật (tối đa shrineSlots) để có hiệu lực mãi mãi; trùng -> +1 sao
-  // Hiệu ứng: { key, mult } nhân  |  { key, add } cộng   |  perStar: tăng thêm mỗi sao từ sao thứ 2
   mascots: {
     shrineSlots: 3,
     durationMin: { jade_rabbit: 15, ladybug: 20, squirrel: 30, owl: 15, worker_bee: 20, firefly: 10 },
     effects: {
       jade_rabbit:    [ { key: 'plant.timeMult', mult: 0.75 } ],
       ladybug:        [ { key: 'gene.keep', add: 0.08 }, { key: 'gene.purityUp', add: 0.06 } ],
-      squirrel:       [ { key: 'energy.regenMult', mult: 2 } ],
+      squirrel:       [ { key: 'production.timeMult', mult: 0.8 } ],
       owl:            [ { key: 'gene.spawn', mult: 2 } ],
       worker_bee:     [ { key: 'harvest.units', mult: 1.3 } ],
       firefly:        [ { key: 'gene.spawn', mult: 1.5 } ],
       fortune_cat:    [ { key: 'coins.mult', mult: 1.10, perStar: 0.02 } ],
       rain_toad:      [ { key: 'plant.timeMult', mult: 0.92, perStar: -0.015 }, { key: 'weather.rain', mult: 1.6 } ],
       golden_buffalo: [ { key: 'harvest.units', mult: 1.12, perStar: 0.03 } ],
-      farm_dog:       [ { key: 'energy.max', add: 10, perStar: 5 } ],
+      farm_dog:       [ { key: 'barn.cap', add: 20, perStar: 10 } ],
       white_swan:     [ { key: 'gene.keep', add: 0.04, perStar: 0.01 } ],
       golden_carp:    [ { key: 'merge.breakthrough', add: 0.03, perStar: 0.01 } ],
       nightingale:    [ { key: 'combo.windowMs', add: 1000 }, { key: 'gene.spawn', mult: 1.1 } ]
@@ -434,7 +485,7 @@ NOA.BALANCE = {
   /* ---------------------------------------------------------- THẾ GIỚI: THỜI TIẾT / TRĂNG / SAO BĂNG */
   world: {
     weather: {
-      slotMinutes: 6,                                   // thời tiết đổi mỗi 6 phút (thời gian thực)
+      slotMinutes: 6,
       weights: { sunny: 40, cloudy: 25, rain: 25, storm: 10 },
       effects: {
         sunny:  { plantTimeMult: 0.95, geneWeights: { solar: 1.5 } },
@@ -442,33 +493,33 @@ NOA.BALANCE = {
         rain:   { plantTimeMult: 0.88, geneWeights: { crystal: 1.6 } },
         storm:  { plantTimeMult: 1.00, geneWeights: { blaze: 1.3, crystal: 1.3 } }
       },
-      rainbowMinutes: 3,          // sau mưa chuyển nắng: cầu vồng xuất hiện 3 phút
-      rainbowFusionMult: 2.0      // trong lúc có cầu vồng: tỉ lệ dung hợp ra gen Cầu Vồng ×2
+      rainbowMinutes: 3,
+      rainbowFusionMult: 2.0
     },
     moon: {
       synodicDays: 29.530588853,
       epochNewMoonUTC: '2000-01-06T18:14:00Z',
-      fullWindowDays: 1.2,        // ± số ngày quanh rằm được tính là "trăng tròn"
-      lunarWeightMult: 3,         // đêm trăng tròn: gen Nguyệt Quang xuất hiện ×3
-      spawnMult: 1.5              // đêm trăng tròn: tỉ lệ xuất hiện gen ×1.5
+      fullWindowDays: 1.2,
+      lunarWeightMult: 3,
+      spawnMult: 1.5
     },
     meteor: {
-      intervalSec: [25, 60],      // sao băng xuất hiện mỗi 25–60 giây (đêm có mưa sao băng)
-      peakIntervalSec: [8, 20],   // đêm cực điểm
+      intervalSec: [25, 60],
+      peakIntervalSec: [8, 20],
       peakWindowDays: 1,
-      stardustChance: 0.85,       // chạm sao băng: 85% nhận Bụi sao, còn lại nhận Ngọc
+      stardustChance: 0.85,
       gemReward: 3,
-      stellarFusionMult: 2.0      // trong mưa sao băng: dung hợp ra Tinh Tú ×2
+      stellarFusionMult: 2.0
     },
     earth: { maxProgress: 100 },
-    idleFirefly: { idleSec: 45, visibleSec: 9 }  // để yên 45 giây -> đom đóm bay qua
+    idleFirefly: { idleSec: 45, visibleSec: 9 }
   },
 
   /* ---------------------------------------------------------- BÍ ẨN (kích hoạt ẩn) */
   secrets: {
-    thunderChance: 0.35,          // 🔥 Hỏa Diệm + 💧 Thủy Tinh khi trời giông -> ⚡ Lôi Vũ
-    whiteTigerChance: 0.30,       // 🐢 Quy + 🦚 Phụng ban đêm có trăng tròn / sao băng -> 🐅 Bạch Hổ
-    octaveCombo: 8,               // combo 8 lần merge = trọn 1 quãng tám
+    thunderChance: 0.35,
+    whiteTigerChance: 0.30,
+    octaveCombo: 8,
     beanTaps: 7,
     beanTapWindowMs: 2600,
     renameWords: ['trái đất', 'trai dat', 'earth'],
@@ -480,20 +531,19 @@ NOA.BALANCE = {
       octave:    { mascot: 'nightingale' },
       mendel:    { rp: 25, boosters: { loupe: 1 } },
       firefly:   { mascot: 'firefly' },
-      fireflyRepeat: { energy: 5 },   // những lần bắt đom đóm sau
+      fireflyRepeat: { coins: 50 },
       bean:      { tickets: { star: 1 } },
       rename:    { gems: 50 },
       clover4:   { gems: 10 },
       rainbow:   { rp: 15 },
-      earthday:  { gems: 22, rp: 22 }   // 22/4 Ngày Trái Đất
+      earthday:  { gems: 22, rp: 22 }
     }
   },
 
   /* ---------------------------------------------------------- TINH CHẤT GEN (tính năng mở rộng — đang TẮT) */
   essence: {
-    // Phân rã vật phẩm có gen -> tinh chất của gen đó. [tầng][độ thuần]
     decomposeYield: { 1: [0, 1, 2, 4, 7, 15], 2: [0, 2, 4, 7, 12, 25], 3: [0, 4, 7, 12, 20, 40] },
-    injectCost: { 1: 3, 2: 8, 3: 20 },          // tinh chất cần để tiêm 1 gen vào vật thường
-    injectChance: { 1: 0.7, 2: 0.45, 3: 0.25 }  // tỉ lệ tiêm thành công
+    injectCost: { 1: 3, 2: 8, 3: 20 },
+    injectChance: { 1: 0.7, 2: 0.45, 3: 0.25 }
   }
 };

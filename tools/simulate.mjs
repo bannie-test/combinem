@@ -82,6 +82,19 @@ check('Đột phá Lv1 → Lv3', NOA.mods.chance('merge.breakthrough', B.merge.b
     () => !!merge(breed('rice', 1, null, { carrier: 'lunar' }), breed('rice', 1, null, { carrier: 'lunar' })).item.gene);
 }
 
+// Harvest seeds / young animals: next-generation inheritance (balance.harvest.seeds, balance.livestock)
+{
+  const cfg = B.harvest.seeds;
+  check('Hạt con giữ gen của cây mẹ', cfg.geneInherit, () => !!NOA.genetics.offspring(breed('rice', 3, ['solar', 2])).gene);
+  check('Cây mẹ có gen → hạt con mang gen LẶN', (1 - cfg.geneInherit) * cfg.carrierFromGene,
+    () => { const c = NOA.genetics.offspring(breed('rice', 3, ['solar', 2])); return !c.gene && c.carrier === 'solar'; });
+  check('Cây mẹ mang gen lặn → hạt con mang tiếp', cfg.carrierInherit,
+    () => NOA.genetics.offspring(breed('rice', 3, null, { carrier: 'lunar' })).carrier === 'lunar');
+  const lv = B.livestock;
+  const p = lv.offspringChance + lv.offspringPerLevel * 1;
+  rows.push({ scenario: 'Con non mỗi lứa (Lv1) — cấu hình', expected: pct(p), observed: '-', z: '-', ok: 'i' });
+}
+
 // Gacha: rarity distribution + pity guarantees
 for (const boxId of Object.keys(B.gacha.boxes)) {
   NOA.state.gacha[boxId] = { opened: 0, since: {} };

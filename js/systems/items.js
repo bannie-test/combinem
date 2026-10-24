@@ -1,11 +1,10 @@
 /*
- * Items: factories, naming, effective stats and value.
+ * Items: breeds (seeds / animals living in the merge grids), barn goods (products & materials
+ * stored as stacks), naming, effective stats and value.
  *
- * Item shapes
- *   seed / animal : { id, kind, species, level, stats:{yield,growth,quality}, gene:{id,purity}|null,
- *                     carrier: geneId|null (hidden recessive gene), revealed, charm, locked }
- *   product       : { id, kind:'product', product, stars, gene|null, locked }
- *   generator     : { id, kind:'generator', generator }
+ *   breed  : { id, kind:'seed'|'animal', species, level, stats:{yield,growth,quality},
+ *              gene:{id,purity}|null, carrier: geneId|null (hidden recessive), revealed, charm, locked }
+ *   barn   : stacks keyed "productId|stars|geneId|purity"  (materials: "straw||0|0")
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
@@ -15,6 +14,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   const C = () => NOA.CONTENT;
   const U = NOA.util;
   const STATS = ['yield', 'growth', 'quality'];
+  const valueCache = {};
 
   const I = NOA.items = {
     STATS,
@@ -23,19 +23,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     family(item) {
       if (!item) return null;
       if (I.isBreed(item)) return C().species[item.species].family;
-      if (item.kind === 'product') return C().species[C().products[item.product].species].family;
-      if (item.kind === 'generator') return C().generators[item.generator].family;
       return null;
     },
-    speciesOf(item) {
-      if (I.isBreed(item)) return item.species;
-      if (item && item.kind === 'product') return C().products[item.product].species;
-      return null;
-    },
+    isMaterial(id) { return !!C().materials[id]; },
+    productSpecies(pid) { return C().products[pid] ? C().products[pid].species : null; },
 
-    /* ------------------------------------------------------------ factories */
+    /* ------------------------------------------------------------ breeds */
     rollStats(level) {
-      const ranges = B().generators.spawnStats;
+      const ranges = B().breeds.spawnStats;
       let r = ranges[level];
       if (!r) {
         const cap = B().merge.statCapByLevel[level] || 100;
@@ -45,13 +40,13 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     },
     randomCarrier(family) {
       if (!NOA.FEATURES.recessiveGenes) return null;
-      if (!U.chance(B().generators.carrierChance)) return null;
+      if (!U.chance(B().breeds.carrierChance)) return null;
       return U.pickWeighted(B().gene.spawnWeights[family]);
     },
     newBreed(species, level, opts) {
       opts = opts || {};
       const fam = C().species[species].family;
-      const item = {
+      return {
         id: U.uid('b'),
         kind: I.kindOf(fam),
         species,
@@ -63,14 +58,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         charm: null,
         locked: false
       };
-      return item;
     },
-    newProduct(productId, stars, gene) {
-      return { id: U.uid('p'), kind: 'product', product: productId, stars: stars || 1, gene: gene || null, locked: false };
-    },
-    newGenerator(id) { return { id: U.uid('g'), kind: 'generator', generator: id }; },
-
-    /* ------------------------------------------------------------ genes & stats */
     geneDef(item) { return item && item.gene ? C().genes[item.gene.id] : null; },
     geneTier(item) { const g = I.geneDef(item); return g ? g.tier : 0; },
     isSuper(item) { return !!(item && item.gene && item.gene.purity >= B().gene.maxPurity); },
@@ -92,57 +80,63 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const row = B().gene.priceMult[def.tier] || [1];
       return row[gene.purity] || row[row.length - 1];
     },
+    breedValue(item) {
+      if (!I.isBreed(item)) return 0;
+      const m = B().market;
+      const hybrid = C().species[item.species].hybrid ? 1.5 : 1;
+      return Math.round(m.seedSellBase * (m.seedLevelMult[item.level] || 1) * I.geneMult(item.gene) * hybrid);
+    },
+    canMerge(a, b) {
+      if (!a || !b || a === b || a.locked || b.locked) return false;
+      return I.isBreed(a) && I.isBreed(b) && a.kind === b.kind && a.species === b.species &&
+        a.level === b.level && a.level < B().merge.maxLevel;
+    },
+    isMaxed(item) { return I.isBreed(item) && item.level >= B().merge.maxLevel; },
 
-    /* ------------------------------------------------------------ value */
+    /* ------------------------------------------------------------ barn goods */
+    key(pid, stars, gene) {
+      if (I.isMaterial(pid)) return pid + '||0|0';
+      return pid + '|' + (stars || 1) + '|' + (gene ? gene.id : '') + '|' + (gene ? gene.purity : 0);
+    },
+    parseKey(key) {
+      const [pid, stars, geneId, purity] = key.split('|');
+      return { pid, stars: Number(stars) || 1, gene: geneId ? { id: geneId, purity: Number(purity) || 1 } : null };
+    },
     unitPrice(species) {
       const eco = B().species[species];
       if (eco.price) return eco.price;
       const sp = C().species[species];
-      if (sp.hybrid) {
-        const avg = (I.unitPrice(sp.hybrid[0]) + I.unitPrice(sp.hybrid[1])) / 2;
-        return avg * (eco.hybridPriceMult || 1);
-      }
+      if (sp.hybrid) return (I.unitPrice(sp.hybrid[0]) + I.unitPrice(sp.hybrid[1])) / 2 * (eco.hybridPriceMult || 1);
       return 1;
     },
-    productValue(productId, stars, gene) {
-      const p = C().products[productId];
-      const b = B().product;
-      return I.unitPrice(p.species) * b.tierUnits[p.tier] * b.tierValueBonus[p.tier] *
-        (b.starPriceMult[stars || 1] || 1) * I.geneMult(gene);
-    },
-    /** Base coin value before market saturation and coin multipliers */
-    value(item) {
-      if (!item) return 0;
-      if (item.kind === 'product') return Math.round(I.productValue(item.product, item.stars, item.gene));
-      if (I.isBreed(item)) {
-        const m = B().market;
-        const hybrid = C().species[item.species].hybrid ? 1.5 : 1;
-        return Math.round(m.seedSellBase * (m.seedLevelMult[item.level] || 1) * I.geneMult(item.gene) * hybrid);
+    /** Base value of a product (1★, no gene). Processed goods = inputs × markup (from the recipe). */
+    baseValue(pid) {
+      if (valueCache[pid] != null) return valueCache[pid];
+      let v;
+      if (I.isMaterial(pid)) v = B().materials[pid].price;
+      else {
+        const rec = B().recipes[pid];
+        if (rec) {
+          v = 0;
+          for (const inp in rec.inputs) v += I.baseValue(inp) * rec.inputs[inp];
+          v *= B().production.valueMarkup;
+        } else {
+          v = I.unitPrice(C().products[pid].species);
+        }
       }
-      return 0;
+      valueCache[pid] = v;
+      return v;
     },
-    marketKey(item) {
-      if (item.kind === 'product') return item.product;
-      if (I.isBreed(item)) return item.species + ':' + item.level;
-      return item.kind;
+    clearValueCache() { for (const k in valueCache) delete valueCache[k]; },
+    productValue(pid, stars, gene) {
+      if (I.isMaterial(pid)) return I.baseValue(pid);
+      return I.baseValue(pid) * (B().product.starPriceMult[stars || 1] || 1) * I.geneMult(gene);
     },
-
-    /* ------------------------------------------------------------ merge rules */
-    canMerge(a, b) {
-      if (!a || !b || a === b || a.locked || b.locked) return false;
-      if (I.isBreed(a) && I.isBreed(b)) {
-        return a.kind === b.kind && a.species === b.species && a.level === b.level && a.level < B().merge.maxLevel;
-      }
-      if (a.kind === 'product' && b.kind === 'product') {
-        return a.product === b.product && C().products[a.product].tier < B().harvest.maxProductTier;
-      }
-      return false;
+    keyValue(key) {
+      const p = I.parseKey(key);
+      return I.productValue(p.pid, p.stars, p.gene);
     },
-    isMaxed(item) {
-      if (I.isBreed(item)) return item.level >= B().merge.maxLevel;
-      if (item && item.kind === 'product') return C().products[item.product].tier >= B().harvest.maxProductTier;
-      return false;
-    },
+    tierOf(pid) { return C().products[pid] ? C().products[pid].tier : 0; },
 
     /* ------------------------------------------------------------ display */
     speciesName(id) { return NOA.t('species.' + id); },
@@ -151,8 +145,6 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (!item) return '';
       if (item.kind === 'seed') return NOA.t('item.seedName', { species: I.speciesName(item.species) });
       if (item.kind === 'animal') return I.speciesName(item.species);
-      if (item.kind === 'product') return NOA.t('product.' + item.product);
-      if (item.kind === 'generator') return NOA.t('gen.' + item.generator);
       return '';
     },
     name(item) {
@@ -160,21 +152,17 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (item && item.gene) return NOA.t('item.withGene', { base, gene: I.geneName(item.gene.id) });
       return base;
     },
-    emoji(item) {
-      if (!item) return '';
-      if (I.isBreed(item)) return C().species[item.species].emoji;
-      if (item.kind === 'product') return C().products[item.product].emoji;
-      if (item.kind === 'generator') return C().generators[item.generator].emoji;
-      return '❔';
+    goodName(pid, gene) {
+      const base = I.isMaterial(pid) ? NOA.t('material.' + pid) : NOA.t('product.' + pid);
+      return gene ? NOA.t('item.withGene', { base, gene: I.geneName(gene.id) }) : base;
     },
-    emoji2(item) {
-      return I.isBreed(item) ? C().species[item.species].emoji2 || null : null;
-    },
+    goodEmoji(pid) { return I.isMaterial(pid) ? C().materials[pid].emoji : C().products[pid].emoji; },
+    emoji(item) { return I.isBreed(item) ? C().species[item.species].emoji : ''; },
+    emoji2(item) { return I.isBreed(item) ? C().species[item.species].emoji2 || null : null; },
     purityText(p) {
       const max = B().gene.maxPurity;
       return '◆'.repeat(p) + '◇'.repeat(Math.max(0, max - p));
     },
-    /** Stars for a quality score (+ jitter) */
     starsFor(quality) {
       const th = B().harvest.starThresholds;
       let s = 1;

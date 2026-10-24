@@ -1,6 +1,7 @@
 /*
- * Rewards: one grant() used by login days, level-ups, shop, secrets, gacha currency and payments.
- * Reward shape: { coins, gems, energy, rp, tickets:{sprout,star}, boosters:{id:n}, storage, mascot, items:[spec] }
+ * Rewards: one grant() used by login days, level-ups, shop, secrets, gacha and payments.
+ * Reward shape: { coins, gems, rp, tickets:{sprout,star}, boosters:{id:n}, materials:{id:n}, products:{id:n},
+ *                 seeds:[{species,level,gene?,purity?}], animals:[...], vault:n, nursery:n, mascot }
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
@@ -11,19 +12,13 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   const S = () => NOA.state;
 
   const R = NOA.rewards = {
-    /** Apply a reward; returns display entries [{ icon, key, n, params }] */
+    /** Apply a reward; returns display entries [{ icon, key, n, label? }] */
     grant(r, source) {
       const out = [];
       if (!r) return out;
       const s = S();
       if (r.coins) { NOA.res.add('coins', r.coins); out.push({ icon: '🪙', key: 'res.coins', n: r.coins }); }
       if (r.gems) { NOA.res.add('gems', r.gems); out.push({ icon: '💎', key: 'res.gems', n: r.gems }); }
-      if (r.energy) { NOA.res.add('energy', r.energy); out.push({ icon: '⚡', key: 'res.energy', n: r.energy }); }
-      if (r.energyFull) {
-        const need = Math.max(0, NOA.res.energyMax() - s.res.energy);
-        NOA.res.add('energy', need);
-        out.push({ icon: '⚡', key: 'res.energy', n: need });
-      }
       if (r.rp) { NOA.res.add('rp', r.rp); out.push({ icon: '🔬', key: 'res.rp', n: r.rp }); }
       for (const t in r.tickets || {}) {
         s.tickets[t] = (s.tickets[t] || 0) + r.tickets[t];
@@ -33,18 +28,24 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         s.boosters[b] = (s.boosters[b] || 0) + r.boosters[b];
         out.push({ icon: C().boosters[b].emoji, key: 'booster.' + b, n: r.boosters[b] });
       }
-      if (r.storage) {
-        s.storageCap = Math.min(B().board.storageMax, s.storageCap + r.storage);
-        out.push({ icon: '📦', key: 'res.storage', n: r.storage });
+      for (const m in r.materials || {}) {
+        NOA.barn.add(m, r.materials[m], { force: true });
+        out.push({ icon: C().materials[m].emoji, key: 'material.' + m, n: r.materials[m] });
       }
+      for (const pid in r.products || {}) {
+        NOA.barn.add(pid, r.products[pid], { force: true });
+        out.push({ icon: C().products[pid].emoji, key: 'product.' + pid, n: r.products[pid] });
+      }
+      for (const spec of (r.seeds || []).concat(r.animals || [])) {
+        const item = R.makeItem(spec);
+        const where = NOA.grids.place(item);
+        out.push({ icon: NOA.items.emoji(item), key: null, label: NOA.items.name(item) + ' Lv' + item.level, n: 1, item, where });
+      }
+      if (r.vault) { NOA.grids.expand('vault', r.vault); out.push({ icon: '🌰', key: 'res.vault', n: r.vault }); }
+      if (r.nursery) { NOA.grids.expand('nursery', r.nursery); out.push({ icon: '🐣', key: 'res.nursery', n: r.nursery }); }
       if (r.mascot) {
         const m = NOA.mascots.add(r.mascot);
         out.push({ icon: C().mascots[r.mascot].emoji, key: 'mascot.' + r.mascot, n: 1, mascot: m });
-      }
-      for (const spec of r.items || []) {
-        const item = R.makeItem(spec);
-        const where = NOA.board.placeOrStore(item, null);
-        out.push({ icon: NOA.items.emoji(item), key: null, label: NOA.items.name(item), n: 1, item, where });
       }
       NOA.events.emit('rewards.granted', { source, entries: out });
       NOA.events.emit('res.changed', { k: 'all' });
@@ -52,7 +53,6 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       return out;
     },
     makeItem(spec) {
-      if (spec.kind === 'product') return NOA.items.newProduct(spec.product, spec.stars || 1, spec.gene || null);
       const gene = spec.gene ? { id: spec.gene, purity: spec.purity || 1 } : null;
       return NOA.items.newBreed(spec.species, spec.level || 1, { gene });
     },
@@ -61,7 +61,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const t = B().levelRewards[level];
       if (t) return t;
       const f = B().levelRewardFormula;
-      const r = { coins: f.coinsBase + f.coinsPerLevel * level, gems: f.gems, energy: f.energy };
+      const r = { coins: f.coinsBase + f.coinsPerLevel * level, gems: f.gems, materials: { manure: f.manure } };
       if (f.starTicketEvery && level % f.starTicketEvery === 0) r.tickets = { star: 1 };
       return r;
     },

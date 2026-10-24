@@ -39,7 +39,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           else if (p.species !== id || p.tier !== i + 1) warn('Sản phẩm ' + pid + ' sai loài/cấp');
         });
       }
-      (sp.feed || []).forEach((f) => { if (!C.species[f]) warn('Thức ăn của ' + id + ' không tồn tại: ' + f); });
+      (sp.feed || []).forEach((f) => { if (!C.products[f] && !C.materials[f]) warn('Thức ăn của ' + id + ' không tồn tại: ' + f); });
+      if (sp.family === 'plant' && ['crop', 'flower'].indexOf(sp.bed) < 0) warn('Loài cây ' + id + ' thiếu bed (crop/flower)');
+      if (sp.family === 'animal') {
+        if (!sp.pen || !C.buildings[sp.pen]) warn('Vật nuôi ' + id + ': chuồng không tồn tại ' + sp.pen);
+        else if (!B.livestock.pens[sp.pen]) warn('balance.livestock.pens thiếu "' + sp.pen + '"');
+        if (!(sp.feed || []).length) warn('Vật nuôi ' + id + ' thiếu feed');
+      }
+      if (sp.byproduct && (!C.materials[sp.byproduct] || !B.byproducts[sp.byproduct])) warn('Phụ phẩm của ' + id + ' không tồn tại: ' + sp.byproduct);
     }
     for (const id in B.species) if (!C.species[id]) warn('balance.species có "' + id + '" nhưng content.species không có');
 
@@ -74,11 +81,38 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     B.merge.breakthroughChance.forEach((v, i) => prob('merge.breakthroughChance[' + i + ']', v));
     prob('harvest.geneProductChance', B.harvest.geneProductChance);
     prob('harvest.naturalCloverChance', B.harvest.naturalCloverChance);
-    prob('generators.carrierChance', B.generators.carrierChance);
+    prob('breeds.carrierChance', B.breeds.carrierChance);
+    for (const k of ['extraChance', 'geneInherit', 'carrierFromGene', 'carrierInherit', 'inheritRatio']) prob('harvest.seeds.' + k, B.harvest.seeds[k]);
+    prob('livestock.offspringChance', B.livestock.offspringChance);
+    prob('livestock.manureChance', B.livestock.manureChance);
+    prob('production.starUpChance', B.production.starUpChance);
     prob('orders.vip.chance', B.orders.vip.chance);
-    prob('orders.earth.chance', B.orders.earth.chance);
     prob('hybrid.baseDiscovery', B.hybrid.baseDiscovery);
-    prob('product.starUpChanceOnMerge', B.product.starUpChanceOnMerge);
+
+    // recipes & buildings
+    for (const pid in B.recipes) {
+      const r = B.recipes[pid];
+      if (!C.products[pid]) warn('recipes: sản phẩm không tồn tại ' + pid);
+      if (!B.production.buildings[r.building]) warn('recipes.' + pid + ': xưởng không tồn tại ' + r.building);
+      for (const inp in r.inputs) {
+        if (!C.products[inp] && !C.materials[inp]) warn('recipes.' + pid + ': nguyên liệu không tồn tại ' + inp);
+        if (!(r.inputs[inp] > 0)) warn('recipes.' + pid + ': số lượng ' + inp + ' phải > 0');
+      }
+      if (!(r.timeSec > 0)) warn('recipes.' + pid + '.timeSec phải > 0');
+    }
+    for (const id in C.species) {
+      const sp = C.species[id];
+      (sp.products || []).slice(1).forEach((pid) => { if (!B.recipes[pid]) warn('Thiếu công thức chế biến cho ' + pid); });
+    }
+    for (const b in B.production.buildings) if (!C.buildings[b]) warn('content.buildings thiếu xưởng "' + b + '"');
+    for (const b in B.livestock.pens) if (!C.buildings[b]) warn('content.buildings thiếu chuồng "' + b + '"');
+    for (const b in C.buildings) if (!C.map.buildings[b]) warn('content.map.buildings thiếu vị trí cho "' + b + '"');
+    for (const bed of ['crop', 'flower']) {
+      const f = B.fields[bed];
+      if (f.cost.length < f.max || f.levelReq.length < f.max) warn('fields.' + bed + ': cost/levelReq phải đủ ' + f.max + ' phần tử');
+      if (!C.map.plots[bed]) warn('content.map.plots thiếu "' + bed + '"');
+    }
+    for (const m in C.materials) if (!B.materials[m]) warn('balance.materials thiếu "' + m + '"');
 
     // labs
     if (B.labs.levels.length !== B.labs.maxLevel + 1) warn('labs.levels phải có ' + (B.labs.maxLevel + 1) + ' phần tử (kể cả null ở index 0)');
@@ -102,6 +136,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       }
       for (const r in box.pity || {}) if (B.gacha.rarityOrder.indexOf(r) < 0) warn('Hộp ' + boxId + ': pity độ hiếm lạ ' + r);
     }
+    for (const id in B.gacha.speciesWeights) if (!C.species[id] || C.species[id].hybrid) warn('gacha.speciesWeights: loài không hợp lệ ' + id);
+    for (const id in C.species) if (!C.species[id].hybrid && !(B.gacha.speciesWeights[id] > 0)) warn('gacha.speciesWeights: thiếu trọng số cho ' + id);
     for (const pool in B.gacha.mascotPools) {
       for (const id in B.gacha.mascotPools[pool]) if (!C.mascots[id]) warn('gacha.mascotPools.' + pool + ': linh vật không tồn tại ' + id);
     }
@@ -109,6 +145,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const r = B.gacha.rewards[rid];
       if (r.type === 'booster' && !C.boosters[r.id]) warn('gacha.rewards.' + rid + ': booster không tồn tại ' + r.id);
       if (r.type === 'mascot' && !B.gacha.mascotPools[r.pool]) warn('gacha.rewards.' + rid + ': nhóm linh vật không tồn tại ' + r.pool);
+      if (r.type === 'material' && !C.materials[r.id]) warn('gacha.rewards.' + rid + ': vật liệu không tồn tại ' + r.id);
     }
 
     // mascots
@@ -123,6 +160,9 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       for (const b in (r && r.boosters) || {}) if (!C.boosters[b]) warn(path + ': booster không tồn tại ' + b);
       for (const tk in (r && r.tickets) || {}) if (!B.gacha.boxes[tk]) warn(path + ': vé không tồn tại ' + tk);
       if (r && r.mascot && !C.mascots[r.mascot]) warn(path + ': linh vật không tồn tại ' + r.mascot);
+      for (const m in (r && r.materials) || {}) if (!C.materials[m]) warn(path + ': vật liệu không tồn tại ' + m);
+      for (const p in (r && r.products) || {}) if (!C.products[p]) warn(path + ': sản phẩm không tồn tại ' + p);
+      ((r && r.seeds) || []).concat((r && r.animals) || []).forEach((sp) => { if (!C.species[sp.species]) warn(path + ': loài không tồn tại ' + sp.species); });
     };
     B.login.days.forEach((d, i) => checkReward('login.days[' + i + ']', d));
     for (const lv in B.levelRewards) checkReward('levelRewards.' + lv, B.levelRewards[lv]);
@@ -146,6 +186,10 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       for (const id in C.genes) need.push('gene.' + id);
       for (const id in C.mascots) need.push('mascot.' + id);
       for (const id in C.boosters) need.push('booster.' + id);
+      for (const id in C.materials) need.push('material.' + id);
+      for (const id in C.buildings) need.push('bld.' + id);
+      for (const z of C.map.zones) need.push('zone.' + z.id);
+      for (const s of C.tutorial) need.push('tut.' + s.id);
       for (const k of need) {
         if (NOA.I18N.vi[k] == null) warn('i18n/vi.js thiếu "' + k + '"');
         if (NOA.I18N.en[k] == null) warn('i18n/en.js thiếu "' + k + '"');

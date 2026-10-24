@@ -85,7 +85,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           box.append(h('h3', null, t('dev.give')), h('div', { class: 'row' },
             UI.btn('+1000🪙', 'sm sun', () => { NOA.res.add('coins', 1000); refresh(); }),
             UI.btn('+100💎', 'sm sky', () => { NOA.res.add('gems', 100); refresh(); }),
-            UI.btn('⚡ MAX', 'sm ghost', () => { NOA.rewards.grant({ energyFull: true }); refresh(); }),
+            UI.btn(t('dev.fillBarn'), 'sm ghost', () => {
+              for (const pid in C().products) if (NOA.production.inputUnlocked(pid) || C().products[pid].tier === 1) NOA.barn.add(pid, 10, { force: true });
+              for (const m in C().materials) NOA.barn.add(m, 10, { force: true });
+              refresh();
+            }),
+            UI.btn(t('dev.finishAll'), 'sm sun', () => { SET.finishAll(); refresh(); }),
             UI.btn('+50🔬', 'sm ghost', () => { NOA.res.add('rp', 50); refresh(); }),
             UI.btn('+5 🍀🧪✨🧃🔍', 'sm ghost', () => { NOA.rewards.grant({ boosters: { clover: 5, stabilizer: 5, stardust: 5, tonic: 5, loupe: 5 } }); refresh(); }),
             UI.btn('+2 🎟️🎟️', 'sm ghost', () => { NOA.rewards.grant({ tickets: { sprout: 2, star: 2 } }); refresh(); }),
@@ -121,8 +126,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
             const fam = g.family;
             const species = fam === 'plant' ? 'tomato' : 'chicken';
             const item = NOA.items.newBreed(species, 2, { gene: { id: sel.value, purity: 3 } });
-            NOA.board.placeOrStore(item, null);
-            NOA.board.recordGene(sel.value, [], fam);
+            if (NOA.grids.place(item) === -1) { UI.toast(t('grid.full', { grid: t('grid.' + NOA.grids.gridFor(item)) }), 'warn'); return; }
+            NOA.grids.recordGene(sel.value, [], fam);
             UI.toast(NOA.items.name(item), 'good');
           })));
 
@@ -137,6 +142,22 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           void m;
         }
       });
+    },
+
+    /** Dev: every field, pen, workshop job and hybrid finishes now */
+    finishAll() {
+      const now = NOA.time.now();
+      const s = S();
+      for (const bed in s.fields) s.fields[bed].forEach((p) => { if (p.seed) p.end = Math.min(p.end, now); });
+      for (const id in s.pens) s.pens[id].slots.forEach((x) => { if (x && x.end) x.end = Math.min(x.end, now); });
+      for (const id in s.factories) s.factories[id].queue.forEach((j) => { j.end = Math.min(j.end, now); j.start = Math.min(j.start, now); });
+      for (const lab in s.labs) s.labs[lab].slots.forEach((j) => { if (j) j.end = Math.min(j.end, now); });
+      NOA.farm.tick();
+      NOA.production.tick();
+      NOA.labs.tick();
+      for (const bed in s.fields) NOA.events.emit('field.changed', { bed });
+      for (const id in s.pens) NOA.events.emit('pens.changed', { penId: id });
+      for (const id in s.factories) NOA.events.emit('factory.changed', { building: id });
     },
 
     /** Roll a box n times on a scratch pity state (the real save is untouched) */

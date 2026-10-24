@@ -24,6 +24,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   let lastSave = Date.now();
   let loginShownFor = null;
   let throttled = 0;
+  let badgeTimer = 0;
 
   const APP = NOA.app = {
     boot(hot) {
@@ -40,9 +41,10 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       NOA.ui.story.init();
 
       // catch up on time spent away
-      NOA.res.tickEnergy();
+      NOA.farm.grantFreePlots();
       NOA.orders.fill();
       NOA.labs.ids.forEach((l) => NOA.labs.syncSlots(l));
+      NOA.ship.tick();
 
       UI.mount();
       UI.fx.init();
@@ -71,7 +73,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     },
 
     afterIntro() {
-      UI.hud.say(UI.story.currentTip() || NOA.t('bean.idle1'));
+      UI.hud.sayDefault();
       UI.story.applyFocus();
       setTimeout(APP.maybeLogin, 900);
     },
@@ -88,33 +90,83 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     wire() {
       const on = NOA.events.on;
       const farm = UI.screens.farm;
-      on('board.changed', () => { farm.renderBoard(); farm.renderOrders(); UI.panels.refreshSheet(); });
-      on('orders.changed', () => farm.renderOrders());
-      on('field.changed', () => { farm.renderField(); UI.panels.refreshSheet(); UI.story.applyFocus(); });
-      on('storage.changed', () => farm.renderDock());
-      on('booster.used', () => farm.renderDock());
-      on('rewards.granted', () => { farm.renderDock(); UI.hud.update(); });
+      const PN = UI.panels;
+      const cur = (id) => UI.current === id;
+      const labBuildings = () => { farm.updateBuilding('greenhouse'); farm.updateBuilding('ranch'); };
+      on('grid.changed', (e) => {
+        if (cur('breed')) {
+          if (e.expanded || e.pending || e.flushed || e.grid !== UI.screens.breed.grid) UI.screens.breed.build();
+          else UI.screens.breed.renderCells();
+          UI.story.applyFocus();
+        }
+        labBuildings();
+        PN.refreshSheet('item:');
+        PN.refreshSheet('picker:');
+      });
+      on('barn.changed', () => {
+        farm.updateBuilding('barn');
+        farm.updateBuilding('orders');
+        ['factory:', 'pen:', 'good:', 'ship', 'picker:', 'plot:'].forEach((k) => PN.refreshSheet(k));
+        if (cur('barn')) UI.screens.barn.render();
+        if (cur('orders')) { UI.screens.orders.render(); UI.story.applyFocus(); }
+        APP.badgesSoon();
+      });
+      on('orders.changed', () => {
+        farm.updateBuilding('orders');
+        if (cur('orders')) { UI.screens.orders.render(); UI.story.applyFocus(); }
+        APP.badgesSoon();
+      });
+      on('field.changed', (e) => {
+        if (e && e.bed) farm.updatePlots(e.bed);
+        else { farm.updatePlots('crop'); farm.updatePlots('flower'); }
+        PN.refreshSheet('plot:');
+        PN.refreshSheet('picker:');
+        UI.story.applyFocus();
+      });
+      on('pens.changed', (e) => {
+        if (e && e.penId) farm.updateBuilding(e.penId);
+        else for (const id in S().pens) farm.updateBuilding(id);
+        PN.refreshSheet('pen:');
+      });
+      on('factory.changed', (e) => { farm.updateBuilding(e.building); PN.refreshSheet('factory:'); });
+      on('ship.changed', () => { farm.updateBuilding('dock'); PN.refreshSheet('ship'); if (cur('orders')) UI.screens.orders.render(); });
+      const labChanged = () => {
+        UI.labs.refresh();
+        labBuildings();
+        if (cur('breed')) UI.screens.breed.build();
+        APP.badgesSoon();
+      };
+      on('lab.changed', labChanged);
+      on('lab.upgraded', labChanged);
+      on('booster.used', () => { if (cur('breed')) UI.screens.breed.renderBag(); PN.refreshSheet('item:'); });
+      on('rewards.granted', () => { UI.hud.update(); if (cur('breed')) UI.screens.breed.renderBag(); });
       on('res.changed', (e) => {
         UI.hud.update();
-        if (e && (e.k === 'coins' || e.k === 'gems' || e.k === 'rp' || e.k === 'all')) {
+        if (e && (e.k === 'coins' || e.k === 'gems' || e.k === 'rp' || e.k === 'all' || e.k === 'tickets')) {
           clearTimeout(throttled);
           throttled = setTimeout(() => {
-            if (UI.current === 'labs' || UI.current === 'shop') UI.screens[UI.current].render();
+            if (cur('shop') || cur('barn')) UI.screens[UI.current].render();
+            UI.labs.refresh();
+            farm.updateBuilding('wishtree');
           }, 120);
         }
       });
       on('xp.changed', () => UI.hud.update());
-      on('level.up', (e) => { UI.panels.levelUp(e); UI.hud.update(); });
-      on('secret.unlocked', (e) => setTimeout(() => UI.panels.secret(e), 500));
-      on('gene.discovered', (e) => UI.hud.say(NOA.t('bean.gene', { gene: NOA.CONTENT.genes[e.gene].emoji + ' ' + NOA.t('gene.' + e.gene) }), 9000));
-      on('mascots.changed', () => { UI.hud.updateSky(); if (UI.current === 'codex') UI.screens.codex.render(); });
+      on('level.up', (e) => { PN.levelUp(e); UI.hud.update(); farm.updateAll(); });
+      on('secret.unlocked', (e) => setTimeout(() => PN.secret(e), 500));
+      on('gene.discovered', (e) => UI.hud.say(NOA.t('bean.gene', { gene: NOA.CONTENT.genes[e.gene].emoji + ' ' + NOA.t('gene.' + e.gene) }), 9000, true));
+      on('mascots.changed', () => { UI.hud.updateSky(); if (cur('codex')) UI.screens.codex.render(); });
       on('mascot.expired', (e) => UI.toast(NOA.t('mascot.expired', { name: NOA.CONTENT.mascots[e.id].emoji + ' ' + NOA.t('mascot.' + e.id) })));
-      on('lab.changed', () => { if (UI.current === 'labs') UI.screens.labs.render(); UI.renderTabs(); });
-      on('lab.upgraded', () => UI.renderTabs());
       on('earth.changed', () => UI.hud.updateSky());
-      on('lang.changed', () => { if (S()) { S().lang = NOA.i18n.lang; UI.renderAll(); UI.hud.render(); } });
+      on('lang.changed', () => { if (S()) { S().lang = NOA.i18n.lang; PN.closeSheet(); UI.renderAll(); UI.hud.render(); UI.story.applyFocus(); } });
       on('payment.completed', () => UI.hud.update());
-      on('essence.changed', () => { if (UI.current === 'labs') UI.screens.labs.render(); });
+      on('essence.changed', () => { UI.labs.refresh(); if (cur('breed')) UI.screens.breed.build(); });
+    },
+
+    /** Tab badges follow the barn, orders and labs; batch their refresh */
+    badgesSoon() {
+      if (badgeTimer) return;
+      badgeTimer = setTimeout(() => { badgeTimer = 0; UI.renderTabs(); }, 150);
     },
 
     startLoop() {
@@ -123,15 +175,18 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       loopTimer = setInterval(() => {
         n += 1;
         try {
-          NOA.res.tickEnergy();
           NOA.farm.tick();
+          NOA.production.tick();
+          NOA.ship.tick();
           NOA.orders.tick();
           NOA.labs.tick();
           NOA.mascots.tick();
           NOA.secrets.tick();
           UI.hud.tick();
           UI.screens.farm.tick();
-          UI.screens.labs.tick();
+          UI.screens.orders.tick();
+          UI.panels.tick();
+          UI.labs.tick();
           if (n % 8 === 0) { UI.renderTabs(); APP.maybeLogin(); }
           if (Date.now() - lastSave > 10000) { lastSave = Date.now(); NOA.save.write(); }
         } catch (e) {
@@ -146,6 +201,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       NOA.state = NOA.newState(lang);
       NOA.seedNewGame();
       NOA.orders.fill();
+      NOA.ship.tick();
       UI.panels.closeSheet();
       UI.current = 'farm';
       UI.mount();

@@ -1,5 +1,5 @@
 /*
- * Blindbox screen + the opening show:
+ * Blindboxes (shop tab + the wish tree on the map) and the opening show:
  *   tap → box shakes (glow escalates white → blue → purple → gold → pink, honest to the roll)
  *   → lid flies off with a burst → cards rise and flip (single) or a 2×5 grid flips in sequence (×10).
  */
@@ -23,10 +23,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     h('div', { class: 'gb-body' }, h('span', { class: 'gb-emblem' }, C().boxes[id].emoji)),
     h('div', { class: 'gb-lid' }, h('div', { class: 'gb-bow' })));
 
-  const GV = NOA.ui.screens.gacha = {
-    render() {
-      const root = document.getElementById('scr-gacha');
-      UI.clear(root);
+  const GV = NOA.ui.gacha = {
+    renderInto(root) {
       root.append(h('div', { class: 'tickets-bar' },
         Object.keys(B().gacha.boxes).map((id) => h('span', { class: 'ev' }, '🎟️ ' + t('ticket.' + B().gacha.boxes[id].ticket) + ' ×' + (S().tickets[B().gacha.boxes[id].ticket] || 0)))));
       Object.keys(B().gacha.boxes).forEach((id) => root.append(GV.boxCard(id)));
@@ -164,9 +162,11 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         ov.classList.add('closing');
         ov.style.animation = 'fadeOut .25s ease forwards';
         setTimeout(() => ov.remove(), 260);
-        const stored = results.filter((r) => r.where && r.where.where === 'storage').length;
-        if (stored) UI.toast(t('toast.toStorage', { n: stored }));
-        GV.render();
+        const pending = results.filter((r) => r.where === 'pending').length;
+        const refund = results.reduce((a, r) => a + (r.refund || 0), 0);
+        if (pending) UI.toast(t('harvest.pending', { n: S().vault.pending.length }), 'warn');
+        if (refund) UI.toast(t('box.refund', { n: UI.num(refund) }), 'warn');
+        if (UI.current === 'shop') UI.screens.shop.render();
         NOA.ui.hud.update();
         NOA.ui.renderTabs();
       };
@@ -181,6 +181,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         art = UI.itemArt(r.item);
         name = I().name(r.item);
         sub = t(r.item.kind === 'seed' ? 'kind.seed' : 'kind.animal') + ' · ' + t('ui.lv', { n: r.item.level });
+        if (r.refund) sub += ' · ' + t('box.refund', { n: UI.num(r.refund) });
         if (r.item.gene) {
           const g = C().genes[r.item.gene.id];
           sub += ' · ' + g.emoji + ' ' + I().purityText(r.item.gene.purity);
@@ -188,6 +189,11 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         } else {
           desc = '🌾 ' + I().stat(r.item, 'yield') + '  ⏱️ ' + I().stat(r.item, 'growth') + '  ⭐ ' + I().stat(r.item, 'quality');
         }
+      } else if (r.type === 'material') {
+        art = h('div', { class: 'art' }, h('span', { class: 'emo' }, C().materials[r.id].emoji));
+        name = t('material.' + r.id) + ' ×' + r.qty;
+        sub = t('bld.barn');
+        desc = t('material.' + r.id + '.desc');
       } else if (r.type === 'booster') {
         art = h('div', { class: 'art' }, h('span', { class: 'emo' }, C().boosters[r.id].emoji));
         name = t('booster.' + r.id) + ' ×' + r.qty;

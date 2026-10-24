@@ -7,7 +7,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
 
 (function () {
   'use strict';
-  const KEY = 'noa-farm-save';
+  const KEY = 'noa-farm-save-v2';
 
   const memory = {};
   const memoryAdapter = {

@@ -1,9 +1,10 @@
-# Noa Farm · Tài liệu thiết kế game (GDD) v0.1
+# Noa Farm · Tài liệu thiết kế game (GDD) v0.2
 
 > **Tên tạm:** Noa Farm · *Nông trại Hành tinh Hạt giống* / *The Seed Planet*
 > **Thể loại:** Merge + nông trại (farming) + lai tạo gen, có yếu tố sưu tập
 > **Nền tảng prototype:** Web (HTML/JS, chạy trên điện thoại và máy tính). Toàn bộ dữ liệu và tỉ lệ đã tách khỏi engine để chuyển sang Unity/Cocos sau này.
 > **Ngôn ngữ:** Tiếng Việt (mặc định) và Tiếng Anh
+> **v0.2:** merge diễn ra trong **Kho hạt giống / Chuồng ươm** của các viện nghiên cứu; thu hoạch sinh ra **hạt giống thế hệ sau và phụ phẩm**; nông trại thành **bản đồ chia khu** kiểu Hay Day / Township (ruộng, vườn hoa, chuồng trại, xưởng chế biến, bến tàu); bỏ năng lượng và máy tạo. Đề xuất công nghệ cho bản mobile ở §20.
 
 Mọi con số trong tài liệu là **giá trị mặc định hiện tại** trong `config/balance.js`. Muốn đổi thì sửa file đó, không cần sửa code.
 
@@ -49,14 +50,14 @@ Những gen ấy chưa mất, chúng đang **ngủ**. Chỉ khi lai tạo đúng
 | **Bác Tư Tàu Ong** | Thương nhân lái "tàu ong vàng" chạy giữa các hành tinh hạt giống, mang đơn hàng |
 | **Cô Lan Tiệm Bánh, Anh Bảo Kỹ Sư, Bà Mơ Thảo Dược, Bé Bin** | Khách đặt hàng thường |
 | **Lữ Khách Phương Xa** 🧙 | Khách bí ẩn, chỉ đặt hàng VIP (hàng có gen / chất lượng cao) |
-| **Bé Na · Vòm Hà Nội** 👧 | Cô bé trên Trái Đất. Đơn "Gửi về Trái Đất" của Na giúp hồi sinh Trái Đất. Là hậu duệ của cô bé mà bà Mai từng hứa |
+| **Bé Na · Vòm Hà Nội** 👧 | Cô bé trên Trái Đất. Mỗi chuyến **Tàu Ong Vàng** chở đầy hàng về cho Na giúp hồi sinh Trái Đất. Là hậu duệ của cô bé mà bà Mai từng hứa |
 
 ### 1.5 Mạch truyện (7 chương, đã có trong game: Sổ tay → Cốt truyện)
 | Chương | Mở khóa | Nội dung |
 |---|---|---|
 | 1 · Thức giấc | Cấp 1 | Tỉnh dậy, gặp Đậu, học merge, gieo hạt lúa đầu tiên |
 | 2 · Gen đang ngủ | Gen đầu tiên | Một hạt phát sáng. Đậu kể về những đoạn gen bà Mai viết thêm |
-| 3 · Tín hiệu từ Trái Đất | Cấp 3 | Radio bắt được "Vòm Hà Nội". Bé Na hỏi *"Hoa hồng có mùi gì ạ?"*. Bắt đầu các đơn gửi về Trái Đất |
+| 3 · Tín hiệu từ Trái Đất | Cấp 3 | Radio bắt được "Vòm Hà Nội". Bé Na hỏi *"Hoa hồng có mùi gì ạ?"*. Tàu Ong Vàng bắt đầu chở hàng về Trái Đất |
 | 4 · Tứ Linh | Gen động vật đầu tiên | Sổ tay bà Mai: vì sao gen động vật mang tên Long, Lân, Quy, Phụng |
 | 5 · Lá thư thứ năm | Trái Đất 20% | Bé Na gửi ảnh chậu hồng đầu tiên nở trong vòm sau 300 năm |
 | 6 · Hạt giống Tinh Tú | Trái Đất 50% | Bản thiết kế cuối của bà Mai: hạt gen thần thoại chịu được hạn hán |
@@ -76,31 +77,29 @@ Những gen ấy chưa mất, chúng đang **ngủ**. Chỉ khi lai tạo đúng
 ## 2. Vòng lặp gameplay
 
 ```
- [🌱 Túi hạt / 🐣 Lồng ấp] ── chạm, tốn ⚡ ──▶ hạt / con giống Lv1 (chỉ số ngẫu nhiên, có thể mang gen lặn ẩn)
-          │
-          ▼
-  ① MERGE GIỐNG ─ 2 vật giống hệt → Lv+1 (có % ĐỘT PHÁ Lv+2) · chỉ số di truyền · GEN (xem §4)
-          │
-          ▼
-  ② TRỒNG / NUÔI ─ hạt vào ô đất · con giống vào chuồng (cần thức ăn) · thời gian theo chỉ số Sinh trưởng
-          │
-          ▼
-  ③ THU HOẠCH ─ sản lượng theo Năng suất · số sao theo Phẩm chất · sản phẩm có thể mang gen
-          │
-          ▼
-  ④ MERGE SẢN PHẨM ─ 2 sản phẩm giống nhau → chế biến cấp cao hơn (luôn thành công)
-          │
-          ▼
-  ⑤ GIAO ĐƠN / BÁN ─ 🪙 Xu, XP, 🔬 Điểm nghiên cứu, 💎 (VIP), % hồi sinh Trái Đất
-          │
-          ▼
-  ⑥ NÂNG CẤP ─ Viện (tăng tỉ lệ gen, mở dung hợp, lai chéo) · mở ô đất / chuồng · linh vật · blindbox
-          └──────────────────────────── quay lại ① ────────────────────────────┘
+ 🌰 KHO HẠT GIỐNG (trong 🌱 Nhà kính)        🐣 CHUỒNG ƯƠM (trong 🐾 Trại nghiên cứu)
+      │  ① MERGE: kéo 2 hạt / con giống GIỐNG HỆT chồng lên nhau → Lv+1 (có % ĐỘT PHÁ Lv+2) · chỉ số di truyền · GEN (§4)
+      ▼                                              ▼
+ 🌾 RUỘNG / 🌸 VƯỜN HOA: gieo hạt             🐔 CHUỒNG TRẠI: thả con giống, cho ăn bằng hàng trong kho
+      │  ② chờ lớn (chỉ số Sinh trưởng)              │  ② ăn xong thì sản xuất theo lứa
+      ▼                                              ▼
+ ③ THU HOẠCH: nông sản (Năng suất; số sao theo Phẩm chất; có thể mang gen)
+      + 🌰 HẠT GIỐNG THẾ HỆ SAU → Kho hạt giống (cấp mẹ − 2, ~75% chỉ số, 35% giữ gen) · §3.3
+      + PHỤ PHẨM: 🧹 Rơm (lúa) · 🌼 Phấn hoa (hoa) · 💩 Phân bón (bò, dê) · 🐣 Con non (vật nuôi → Chuồng ươm)
+      ▼
+ 📦 KHO NÔNG SẢN (sức chứa chung, nâng cấp được)
+      │  ④ CHẾ BIẾN ở Khu chế biến: 🏭 Nhà xay · 🍳 Bếp · 🧀 Lò sữa · 🧵 Xưởng thủ công (công thức nhiều nguyên liệu, hàng chờ)
+      ▼
+ ⑤ GIAO / BÁN: 📋 Bảng đơn hàng (Xu, XP; VIP thêm 🔬 💎) · 🚀 Tàu Ong Vàng (chất đủ thùng → 💎 🔬 + % hồi sinh Trái Đất) · 🧺 Sạp chợ
+      ▼
+ ⑥ NÂNG CẤP: Viện (tỉ lệ gen, dung hợp, lai chéo) · mở ruộng / luống hoa / ô nuôi / hàng chờ xưởng · nâng kho · linh vật · blindbox
+      └──────────────────────────────────── quay lại ① ────────────────────────────────────┘
 ```
 
-- **Core loop (giây):** chạm máy tạo → merge → trồng → thu → merge sản phẩm → giao.
-- **Mid loop (phút → giờ):** nâng Viện, lai chéo, săn gen, mở hộp, hoàn thành đơn VIP.
-- **Meta loop (ngày → tuần):** chuỗi đăng nhập 7 ngày, linh vật, sự kiện bầu trời thật, sưu tập Sổ tay, % hồi sinh Trái Đất và cốt truyện.
+- **Core loop (giây → phút):** gieo → thu (✂️ vuốt qua nhiều ruộng) → merge hạt mới trong kho → gieo lại; cho ăn → thu trứng, sữa; chế biến → giao đơn.
+- **Mid loop (phút → giờ):** nuôi một **dòng giống**: merge lên Lv cao để thu nhiều, giữ gen qua nhiều thế hệ hạt, nâng Viện, lai chéo, chất hàng lên tàu, đơn VIP.
+- **Meta loop (ngày → tuần):** chuỗi đăng nhập 7 ngày, mở rộng bản đồ (ruộng, luống hoa, chuồng, xưởng), linh vật, sự kiện bầu trời thật, Sổ tay, % hồi sinh Trái Đất và cốt truyện.
+- **Nguồn hạt / con giống:** thu hoạch (thế hệ sau), vật nuôi đẻ con non, Sạp chợ (Lv1 giá rẻ), blindbox, phần thưởng. Không còn năng lượng hay máy tạo: hạt giống là tài nguyên tái tạo, người chơi tự quyết giữ hạt tốt để merge hay bán bớt.
 
 ---
 
@@ -120,9 +119,20 @@ Những gen ấy chưa mất, chúng đang **ngủ**. Chỉ khi lai tạo đúng
 - **Đột phá:** merge 2 vật Lv *n* có xác suất ra thẳng **Lv *n*+2**: Lv1 7%, Lv2 6%, Lv3 5%, cộng thêm 8 điểm mọi chỉ số.
 - **Combo:** các lần merge cách nhau dưới 2,4 giây tạo combo. Cao độ âm thanh leo dần theo gam Đô trưởng.
 
-### 3.3 Merge sản phẩm
-- 2 sản phẩm giống nhau → sản phẩm chế biến cấp cao hơn (3 cấp mỗi loài, ví dụ 🌾 Bó lúa → 🍚 Gạo thơm → 🍙 Cơm nắm). Luôn thành công.
-- Sao = trung bình, có 20% được +1★. Gen đi theo cùng quy tắc giữ/mất gen của §4.
+### 3.3 Hạt giống thế hệ sau (di truyền khi thu hoạch)
+Mỗi lần thu hoạch một ô ruộng, ngoài nông sản còn có **hạt giống con** bay về 🌰 Kho hạt giống:
+
+| | Quy tắc (mặc định trong `balance.harvest.seeds`) |
+|---|---|
+| Số hạt | theo cấp cây mẹ: Lv1 1 · Lv2 1 · Lv3 2 · Lv4 2 · Lv5 3, cộng 30% (+0,4% mỗi điểm Năng suất) có thêm 1 hạt; ruộng bón 💩 thêm 1 hạt |
+| Cấp hạt con | **cấp mẹ − 2** (tối thiểu Lv1): hạt Lv5 cho hạt Lv3 → muốn giữ Lv5 phải tiếp tục merge |
+| Chỉ số | ≈ 75% chỉ số mẹ ± 5 (đột biến), không vượt trần của cấp |
+| Gen | mẹ có gen: mỗi hạt con **35%** giữ gen (◆ −1); không giữ thì 50% thành **gen lặn** ẩn. Mẹ mang gen lặn: con mang tiếp 50% |
+| Kho đầy | tối đa 12 hạt chờ trong 🧺 giỏ, quá nữa thì mất (có cảnh báo) |
+
+- **Vật nuôi:** mỗi lứa có **14% + 2% × cấp** đẻ một **con non** về 🐣 Chuồng ươm, di truyền theo cùng quy tắc.
+- **Ý đồ thiết kế:** hạt giống là tài nguyên tái tạo nhưng "xuống cấp" theo thế hệ, nên merge luôn có việc để làm; một dòng gen quý có thể được nhân giống qua nhiều thế hệ nếu người chơi kiên nhẫn (đúng tinh thần Kho Gen của câu chuyện).
+- **Sản phẩm không merge nữa:** nông sản đi vào Kho nông sản và được **chế biến** ở xưởng (§6.4).
 
 ---
 
@@ -195,21 +205,23 @@ Khi kéo một vật lên vật giống hệt, game hiện **bảng tỉ lệ th
 
 ## 5. Viện nghiên cứu
 
-Có hai cơ sở, tiến độ riêng:
-- 🌱 **Nhà Kính Lai Tạo** áp dụng cho mọi hạt giống.
-- 🐾 **Trại Nghiên Cứu Vật Nuôi** áp dụng cho mọi con giống. Mở ở cấp 3.
+Có hai cơ sở ở **Khu nghiên cứu** trên bản đồ, tiến độ riêng. Bên trong mỗi viện là **bàn merge**:
+- 🌱 **Nhà Kính Lai Tạo** chứa 🌰 **Kho hạt giống** (24 ô, mở rộng tới 48) và áp dụng cho mọi hạt giống.
+- 🐾 **Trại Nghiên Cứu Vật Nuôi** chứa 🐣 **Chuồng ươm** (12 ô, tới 30) và áp dụng cho mọi con giống.
+
+Chạm viện trên bản đồ (hoặc tab 🧬 Lai tạo) để mở bàn merge; nút ⬆️ là bảng nâng cấp, nút 🧪 là bàn lai chéo.
 
 Nâng cấp bằng 🪙 Xu và 🔬 **Điểm nghiên cứu**. RP lấy từ đơn VIP, đơn Trái Đất, thu hoạch hàng có gen, khám phá gen mới và lai chéo thất bại.
 
-| Cấp | Chi phí | +Thành công | Gen mới | +Đột phá | Ô lai | Lai thành công | ◆ tối đa | Dung hợp | Ra thẳng Lv2 |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | | +0% | 1,0% | +0% | 0 | 35% | ◆2 | Tầng 1 | 0% |
-| 2 | 600🪙 · 8🔬 | +2% | 1,3% | +0,5% | 1 | 35% | ◆3 | Tầng 1 | 3% |
-| 3 | 1.600 · 20 | +4% | 1,6% | +1% | 1 | 38% | ◆3 | **Tầng 2** | 5% |
-| 4 | 3.200 · 36 | +6% | 1,9% | +1,5% | 1 | 41% | ◆4 | Tầng 2 | 7% |
-| 5 | 5.600 · 56 | +8% | 2,2% | +2% | 2 | 44% | ◆4 | Tầng 2 | 9% |
-| 6 | 9.000 · 80 | +10% | 2,6% | +2,5% | 2 | 47% | **◆5** | **Tầng 3** | 11% |
-| 7–10 | … | … +20% | … 5% | … +5% | 3–4 | … 62% | ◆5 | Tầng 3 | … 22% |
+| Cấp | Chi phí | +Thành công | Gen mới | +Đột phá | Ô lai | Lai thành công | ◆ tối đa | Dung hợp |
+|---|---|---|---|---|---|---|---|---|
+| 1 | | +0% | 1,0% | +0% | 0 | 35% | ◆2 | Tầng 1 |
+| 2 | 600🪙 · 8🔬 | +2% | 1,3% | +0,5% | 1 | 35% | ◆3 | Tầng 1 |
+| 3 | 1.600 · 20 | +4% | 1,6% | +1% | 1 | 38% | ◆3 | **Tầng 2** |
+| 4 | 3.200 · 36 | +6% | 1,9% | +1,5% | 1 | 41% | ◆4 | Tầng 2 |
+| 5 | 5.600 · 56 | +8% | 2,2% | +2% | 2 | 44% | ◆4 | Tầng 2 |
+| 6 | 9.000 · 80 | +10% | 2,6% | +2,5% | 2 | 47% | **◆5** | **Tầng 3** |
+| 7–10 | … | … +20% | … 5% | … +5% | 3–4 | … 62% | ◆5 | Tầng 3 |
 
 "Thành công" cộng vào: giữ gen, lên độ thuần, dung hợp.
 
@@ -226,31 +238,76 @@ Chọn 2 loài **khác nhau** cùng họ, trả 200🪙, chờ 90 giây. Nếu l
 
 ---
 
-## 6. Nông trại
+## 6. Bản đồ nông trại (kiểu Hay Day / Township)
 
-- **Ô đất:** 3 ô ban đầu, tối đa 8 (mua bằng Xu, mở dần theo cấp). Kéo hạt vào để trồng.
-- **Chuồng:** 1 chuồng ban đầu, tối đa 5. Kéo con giống vào. **Vật nuôi cần thức ăn:** gà/bò/cừu/dê ăn lúa, ong ăn hoa (hồng, hướng dương). Mỗi đơn vị thức ăn = 1 lứa. Máng chứa tối đa 12.
-- **Sản lượng mỗi lần** = đơn vị gốc theo cấp (1/2/4/8/16) × (1 + Năng suất%) × bonus.
-- **Thời gian** = thời gian gốc của loài × hệ số theo cấp (1 / 1,5 / 2,1 / 2,7 / 3,3) × (1 − Sinh trưởng × 0,5%) × bonus (thời tiết, linh vật). Hạt cấp cao cho nhiều hàng hơn hẳn trên cùng một ô đất, nên merge luôn có lợi.
-- **Đóng gói:** sản lượng lớn tự gộp thành sản phẩm cấp 2 (≥4 đơn vị) hoặc cấp 3 (≥8 đơn vị) để bàn không bị ngập. Bàn đầy thì vào kho, kho đầy thì chờ dọn.
-- Mỗi sản phẩm của giống có gen có **60%** mang gen đó, kèm +1🔬.
-- 🧃 **Thuốc tăng trưởng** làm ô đất hoặc chuồng xong ngay.
+Nông trại là **một bản đồ cuộn và phóng to được** (kéo để đi, chụm hai ngón hoặc nút ＋/－ để zoom, có quán tính). Mỗi khu là một mảnh đất riêng có **biển tên treo**, nên người chơi nhìn là biết đâu là ruộng, đâu là chuồng. Thanh chip ở đáy bản đồ đưa camera bay tới từng khu.
+
+### 6.1 Các khu (từ trên xuống)
+| Khu | Có gì | Chạm vào để |
+|---|---|---|
+| 🏡 Sân nhà & Chợ | Nhà của Đậu · 📋 Bảng đơn hàng · 📦 Kho nông sản · 🧺 Sạp chợ | Cốt truyện · giao đơn · xem kho · mua hạt / con giống, bán hàng |
+| 🌾 Ruộng | 4 ô đầu → tối đa 12 (300 → 8.000🪙, mở dần cấp 2–12) | gieo, thu, bón phân |
+| 🌸 Vườn hoa | luống hoa (2 luống miễn phí ở cấp 2, tối đa 6) | trồng hoa hồng, hướng dương, dâu tây hoa hồng |
+| 🔬 Khu nghiên cứu | 🌱 Nhà kính · 🐾 Trại nghiên cứu · ⛩️ Đền linh vật · 🎋 Cây điều ước (blindbox) | merge, nâng viện, lai chéo · đặt linh vật · mở hộp |
+| 🐄 Khu chăn nuôi | 🐔 Chuồng gà · 🐄 Chuồng bò · 🐝 Trại ong · 🐑 Bãi cừu · 🐐 Chuồng dê · ao vịt | thả con giống, cho ăn, thu hoạch |
+| 🏭 Khu chế biến | 🏭 Nhà xay · 🍳 Bếp · 🧀 Lò sữa · 🧵 Xưởng thủ công | chế biến theo công thức |
+| 🚀 Bến tàu | 🚀 Tàu Ong Vàng | chất hàng gửi về Trái Đất |
+
+- **Trạng thái hiện ngay trên bản đồ** (bong bóng): ruộng chín sáng vàng kèm "✂️ Thu!"; con vật đói có bong bóng nghĩ hình thức ăn, xong thì nảy sản phẩm; xưởng hiện món đang làm + đồng hồ, xong thì "✓"; bảng đơn hiện số đơn giao được; viện hiện số cặp merge được hoặc 🧪 lai xong; kho đầy thì cảnh báo.
+- Ô / chuồng / xưởng **chưa mở** vẫn hiện trên bản đồ (bụi cỏ, khóa, giá hoặc "🔒 Lv*n*"), để người chơi luôn thấy mục tiêu tiếp theo.
+- **Robot Đậu** đứng ở góc bản đồ với bong bóng lời thoại; ngoài lúc hướng dẫn, bong bóng tự thu gọn để không che bản đồ. Ngày / đêm, mưa, giông, cầu vồng phủ lên cả bản đồ; sao băng bay ngang qua.
+
+### 6.2 Ruộng & vườn hoa
+- **Gieo:** chạm ô trống → bảng chọn hạt (hạt có gen và cấp cao lên đầu, hiện thời gian lớn). Gieo xong bảng tự chuyển sang ô trống kế tiếp.
+- **Thu hoạch:** chạm ô chín, hoặc **giữ và vuốt ✂️ qua nhiều ô** (như liềm của Hay Day). Nông sản bay về tab 📦 Kho, hạt giống bay về tab 🧬 Lai tạo.
+- **Sản lượng mỗi lần** = đơn vị gốc theo cấp (2 / 4 / 7 / 12 / 20) × (1 + Năng suất%) × bonus. **Thời gian** = thời gian gốc của loài × hệ số theo cấp (1 / 1,4 / 1,9 / 2,4 / 3,0) × (1 − Sinh trưởng × 0,5%) × bonus (thời tiết, linh vật).
+- Mỗi nông sản của giống có gen có **50%** mang gen đó, kèm +1🔬.
+- **Phụ phẩm:** lúa cho 🧹 Rơm, hoa cho 🌼 Phấn hoa: `1 + ⌊nông sản / 3⌋`.
+- **💩 Bón phân** (từ bò, dê, hoặc cửa hàng): lần thu tới ×1,5 nông sản và thêm 1 hạt giống.
+- Kho nông sản thiếu chỗ thì **chưa cho thu** (cây vẫn đứng chờ, không mất).
+
+### 6.3 Chăn nuôi
+| Chuồng | Loài (mở ở cấp) | Ăn | Ra | Phụ phẩm |
+|---|---|---|---|---|
+| 🐔 Chuồng gà (2 → 6 ô) | Gà (1) | 🌾 Bó lúa | 🥚 Trứng | con non |
+| 🐄 Chuồng bò (1 → 5) | Bò (3) | 🧹 Rơm | 🥛 Sữa | 💩 60% mỗi lứa, con non |
+| 🐝 Trại ong (1 → 4) | Ong (4) | 🌼 Phấn hoa | 🍯 Mật ong | con non |
+| 🐑 Bãi cừu (1 → 5) | Cừu (5), Cừu dê (lai) | 🧹 Rơm | 🧶 Len | con non |
+| 🐐 Chuồng dê (1 → 5) | Dê (6) | 🧹 Rơm | 🍼 Sữa dê | 💩, con non |
+
+- Chạm chuồng: có con xong thì **thu cả chuồng**; nếu không thì mở bảng chuồng (cho ăn tất cả, thêm con giống từ Chuồng ươm, đưa con về, mở ô nuôi, dùng 🧃).
+- Chuỗi phụ thuộc kiểu Hay Day: **lúa → rơm → bò → phân bón → ruộng** và **hoa → phấn → ong**, nên các khu gắn bó với nhau.
+
+### 6.4 Chế biến (kiểu Township)
+Mỗi xưởng chạy **một món một lúc**, các món khác xếp hàng chờ (2 ô, mua thêm tới 5). Giá trị thành phẩm = tổng giá nguyên liệu × 1,3. Sao = trung bình nguyên liệu (+15% được thêm 1★). Gen chỉ giữ nếu mọi nguyên liệu cùng gen (tỉ lệ "cao cấp + cao cấp"), còn lại dùng tỉ lệ thấp "cao cấp + thường".
+
+| Xưởng (mở ở cấp) | Công thức tiêu biểu |
+|---|---|
+| 🏭 Nhà xay (1) | 3 Bó lúa → 🍚 Gạo thơm · 3 Hoa hướng dương → 🌰 Hạt hướng dương |
+| 🍳 Bếp (3) | 2 Gạo thơm → 🍙 Cơm nắm · 3 Cà chua → 🥫 Sốt cà chua · 2 Trứng → 🍳 Trứng ốp la · 3 Trứng + Sữa → 🍮 Bánh flan · Mật ong + Gạo thơm + Trứng → 🥞 Bánh mật ong … |
+| 🧀 Lò sữa (4) | 3 Sữa → 🧈 Bơ · 2 Sữa + Mật ong → 🍦 Kem · 3 Sữa dê → 🧀 Phô mai dê |
+| 🧵 Xưởng thủ công (5) | 3 Cành hồng → 💐 Bó hồng · 2 Mật ong → 🕯️ Nến · 3 Len → 🧣 Khăn len … |
+
+Toàn bộ 22 công thức ở `balance.recipes`; thêm công thức mới chỉ cần thêm một dòng.
+
+### 6.5 Kho
+- 📦 **Kho nông sản:** 100 chỗ dùng chung cho nông sản, thành phẩm và vật liệu; mỗi lần nâng +25 (tối đa 400), giá 400🪙 × 1,5ⁿ. Món khác sao / khác gen là chồng riêng.
+- 🌰 **Kho hạt giống** và 🐣 **Chuồng ươm** là lưới merge (6 cột), mở rộng bằng 💎 ở Cửa hàng.
 
 ---
 
-## 7. Đơn hàng, bán hàng, thị trường
+## 7. Đơn hàng, tàu, bán hàng, thị trường
 
 | Loại | Điều kiện | Thưởng |
 |---|---|---|
-| Thường | 1–3 dòng hàng, cấp chế biến tăng theo cấp người chơi | Xu = **giá trị thật của hàng giao** × 1,5, kèm XP |
+| 📋 Thường (6 đơn trên bảng) | 1–3 dòng hàng; cấp càng cao càng hay đòi hàng chế biến tầng 2–3 | Xu = **giá trị thật của hàng giao** × 1,5, kèm XP |
 | ✨ VIP (Lữ Khách Phương Xa) | Từ cấp 4, 18%: cần hàng **có gen** hoặc **≥3★** | ×2,6 Xu, 4–12🔬, 35% có 2–6💎 |
-| 🌍 Gửi về Trái Đất (Bé Na) | Từ cấp 3, 20% | +2% hồi sinh Trái Đất, +3🔬 |
+| 🚀 Tàu Ong Vàng (Bác Tư chở về cho Bé Na) | Từ cấp 3. Tàu đậu 8 phút với 3 thùng hàng, đi 4 phút rồi quay lại | Mỗi thùng: giá trị × 1,8 Xu. **Chất đủ cả 3 thùng:** +5💎 +10🔬 và **+3% hồi sinh Trái Đất** |
 
-- Giao hàng chất lượng cao (sao, gen) thì nhận nhiều Xu hơn, vì thưởng tính theo giá trị thật.
-- Nút **Giao** tự chọn món **rẻ nhất** phù hợp và không bao giờ lấy đồ đã khóa. Cũng có thể kéo từng món thả vào thẻ đơn.
-- **Đổi đơn:** miễn phí, hồi chiêu 45 giây (chỉ khi chưa giao món nào).
-- **Bán:** kéo vào 🧺. Bão hòa thị trường: mỗi lần bán cùng một loại trong ngày giảm 5% giá, thấp nhất 45%. Vật có gen hoặc Lv4+ phải xác nhận trước khi bán.
-- 🔒 **Khóa** vật quý để không merge hay bán nhầm.
+- Giao hàng chất lượng cao (sao, gen) thì nhận nhiều Xu hơn, vì thưởng tính theo giá trị thật. Nút **Giao** tự lấy món **rẻ nhất** phù hợp trong kho.
+- **Đổi đơn:** hồi chiêu chung 60 giây.
+- **Bán:** ở Kho nông sản (bán 1 / bán hết) hoặc kéo hạt / con giống vào 🧺 ở bàn merge. Bão hòa thị trường: mỗi lần bán cùng một loại trong ngày giảm 5% giá, thấp nhất 45%. Vật có gen hoặc Lv4+ phải xác nhận trước khi bán.
+- 🔒 **Khóa** hạt / con giống quý để không merge hay bán nhầm.
 
 ---
 
@@ -260,7 +317,7 @@ Chọn 2 loài **khác nhau** cùng họ, trả 200🪙, chờ 90 giây. Nếu l
 | 🍀 | Cỏ bốn lá | Kéo lên hạt / con giống (gắn bùa) | Lần merge kế: +15% giữ gen, +10% lên ◆, +8% dung hợp, gen mới ×2,5, +3% đột phá |
 | 🧪 | Bình ổn gen | Gắn bùa | Lần merge kế **chắc chắn không mất gen, không giảm ◆** |
 | ✨ | Bụi sao | Gắn bùa | +10% đột phá, +10% dung hợp |
-| 🧃 | Thuốc tăng trưởng | Kéo lên ô đất / chuồng | Xong ngay |
+| 🧃 | Thuốc tăng trưởng | Dùng ở bảng ô ruộng / chuồng / xưởng | Xong ngay 1 ô ruộng, cả chuồng hoặc món đang chế biến |
 | 🔍 | Kính lúp gen | Kéo lên hạt / con giống | Soi gen lặn |
 
 Bùa của cả hai bên đều tính vào lần merge và bị tiêu hao sau lần đó.
@@ -268,8 +325,8 @@ Bùa của cả hai bên đều tính vào lần merge và bị tiêu hao sau l�
 ---
 
 ## 9. Linh vật
-- **Tạm thời** (kích hoạt ngay, trùng thì cộng dồn thời gian): 🐇 Thỏ Ngọc (cây lớn nhanh 25%), 🐞 Bọ Rùa (+8% giữ gen), 🐿️ Sóc (năng lượng hồi ×2), 🦉 Cú Đêm (gen mới ×2), 🐝 Ong Thợ (+30% sản lượng), 💫 Đom Đóm *(bí ẩn)*.
-- **Vĩnh viễn** (đặt vào **Đền linh vật**, 3 ô; trùng thì +1★, tối đa 5★, đủ sao thì đổi Ngọc): 🐈 Mèo Thần Tài (+10% Xu), 🐸 Cóc Gọi Mưa ("con cóc là cậu ông Trời": cây nhanh hơn, trời hay mưa hơn), 🐃 Trâu Vàng (+12% sản lượng), 🐕 Chó Giữ Vườn (+10 năng lượng tối đa), 🦢 Thiên Nga (+4% giữ gen), 🐟 Cá Chép Vượt Vũ Môn (+3% đột phá: cá chép hóa rồng), 🐦 Chim Họa Mi *(bí ẩn)*.
+- **Tạm thời** (kích hoạt ngay, trùng thì cộng dồn thời gian): 🐇 Thỏ Ngọc (cây lớn nhanh 25%), 🐞 Bọ Rùa (+8% giữ gen), 🐿️ Sóc (chế biến nhanh 20%), 🦉 Cú Đêm (gen mới ×2), 🐝 Ong Thợ (+30% sản lượng), 💫 Đom Đóm *(bí ẩn)*.
+- **Vĩnh viễn** (đặt vào **Đền linh vật**, 3 ô; trùng thì +1★, tối đa 5★, đủ sao thì đổi Ngọc): 🐈 Mèo Thần Tài (+10% Xu), 🐸 Cóc Gọi Mưa ("con cóc là cậu ông Trời": cây nhanh hơn, trời hay mưa hơn), 🐃 Trâu Vàng (+12% sản lượng), 🐕 Chó Giữ Vườn (+20 chỗ trong Kho nông sản, +10 mỗi sao), 🦢 Thiên Nga (+4% giữ gen), 🐟 Cá Chép Vượt Vũ Môn (+3% đột phá: cá chép hóa rồng), 🐦 Chim Họa Mi *(bí ẩn)*.
 
 ---
 
@@ -297,9 +354,9 @@ Bùa của cả hai bên đều tính vào lần merge và bị tiêu hao sau l�
 ---
 
 ## 11. Phần thưởng đăng nhập & lên cấp
-- **Đăng nhập 7 ngày** (lặp lại, không reset khi bỏ lỡ): 200🪙 · 30⚡+🍀 · Vé Mầm Xanh · 400🪙+15🔬 · 15💎 · 40⚡+🧪 · **30💎 + Vé Tinh Tú**. Tự hiện khi mở game, nút 🎁 trên bầu trời có chấm đỏ báo.
-- **Lên cấp:** bảng riêng cho cấp 2–10, sau đó theo công thức (Xu tăng dần, 10💎, vé Tinh Tú mỗi 5 cấp). Màn hình lên cấp liệt kê phần thưởng và **tính năng mới mở**.
-- **Mở khóa theo cấp:** Blindbox (2) · Trại vật nuôi & Đền linh vật (3) · Đơn VIP (4) · Lai chéo & Hộp Tinh Tú (5). Loài mới mở dần từ cấp 1 đến 7.
+- **Đăng nhập 7 ngày** (lặp lại, không reset khi bỏ lỡ): 200🪙 · 3💩+🍀 · Vé Mầm Xanh · 400🪙+15🔬 · 15💎 · 10🧹+🧪 · **30💎 + Vé Tinh Tú**. Tự hiện khi mở game, nút 🎁 ở góc bản đồ có chấm đỏ báo.
+- **Lên cấp:** bảng riêng cho cấp 2–10 (có hạt hoa hồng, con bò, rơm, phấn hoa, phân bón…), sau đó theo công thức (Xu tăng dần, 10💎, 3💩, vé Tinh Tú mỗi 5 cấp). Màn hình lên cấp liệt kê phần thưởng và **loài, công trình, ô đất mới mở**.
+- **Mở khóa theo cấp:** Vườn hoa & Blindbox (2) · Bếp, Tàu Ong Vàng & Đền linh vật (3) · Lò sữa & Đơn VIP (4) · Xưởng thủ công, Lai chéo & Hộp Tinh Tú (5). Loài mới mở dần từ cấp 1 đến 6, ruộng tới cấp 12.
 
 ---
 
@@ -310,10 +367,12 @@ Bùa của cả hai bên đều tính vào lần merge và bị tiêu hao sau l�
 - 💎 **Ngọc** (hard): **từ nạp tiền**, ngoài ra có ít từ đăng nhập, lên cấp, VIP, bí ẩn.
 
 ### 12.2 Cửa hàng
-- **Vật phẩm:** năng lượng, bùa may mắn, thuốc, kính lúp, mở rộng kho, vé Tinh Tú. Mỗi món mua bằng Xu hoặc Ngọc.
+- **🌱 Hạt & con giống Lv1** của mọi loài đã mở (cũng là Sạp chợ trên bản đồ).
+- **🧰 Vật tư:** phân bón, rơm, phấn hoa, bùa may mắn, thuốc, kính lúp, mở rộng Kho hạt giống / Chuồng ươm, vé Tinh Tú. Mỗi món mua bằng Xu hoặc Ngọc.
+- **🎁 Blindbox** (cũng là Cây điều ước trên bản đồ).
 - **Đổi Ngọc → Xu:** 10💎 = 800🪙.
 - **Ngọc (nạp tiền):** 4 gói, giá hiển thị VND (tiếng Việt) hoặc USD (tiếng Anh).
-- **Ưu đãi:** Gói Khởi Đầu (mua 1 lần), Thẻ Tháng (100💎 ngay, sau đó 15💎 + 20⚡ mỗi ngày trong 30 ngày).
+- **Ưu đãi:** Gói Khởi Đầu (mua 1 lần), Thẻ Tháng (100💎 ngay, sau đó 15💎 + 1🧃 mỗi ngày trong 30 ngày).
 
 ### 12.3 Kiến trúc thanh toán (đã dựng sẵn, CHƯA BẬT)
 `config/payment.js` chứa `enabled: false`, provider, **endpoint server**, **liên kết** (Google Play, App Store, cổng web, điều khoản, quyền riêng tư, hỗ trợ) và **danh mục sản phẩm** (sku, giá VND/USD, mã sản phẩm trên từng store).
@@ -424,8 +483,9 @@ Nguyên tắc: **gợi ý mơ hồ, khám phá bằng quan sát.** Sổ tay → 
 config/  →  js/core (noa: util, rng, events, hooks, MODS)  →  js/systems (logic, không DOM)  →  js/ui (giao diện)
 ```
 - **Bộ cộng dồn tỉ lệ (`NOA.mods`):** mọi tỉ lệ đọc qua `NOA.mods.chance(key, base, ctx)`. Viện, linh vật, bùa, thời tiết, sự kiện đều chỉ là **nhà cung cấp** (provider). Tính năng mới muốn cộng tỉ lệ thì đăng ký provider, không sửa hệ thống gen.
-- **Hooks (điểm mở rộng):** `item.actions` (thêm nút cho thẻ vật phẩm), `labs.sections` (thêm khu trong Viện), `gene.secretFusion` (công thức gen bí ẩn), `merge.result`, `spawn.species`, `order.generated`.
-- **Sự kiện:** `merge.done`, `harvest`, `order.complete`, `gacha.opened`, `level.up`, `secret.unlocked`, `payment.completed`…
+- **Hooks (điểm mở rộng):** `item.actions` (thêm nút cho thẻ hạt / con giống), `labs.sections` (thêm khu trong Viện), `gene.secretFusion` (công thức gen bí ẩn), `merge.result`, `order.generated`.
+- **Sự kiện:** `merge.done`, `plot.planted`, `harvest`, `pen.fed`, `production.started`, `order.complete`, `ship.departed`, `gacha.opened`, `level.up`, `secret.unlocked`, `payment.completed`…
+- **Bản đồ là dữ liệu:** vị trí khu, công trình, ô ruộng nằm ở `content.map`; thêm một chuồng / xưởng mới = thêm dòng `content.buildings` + `content.map.buildings` + số liệu ở `balance`.
 - **Ví dụ thật: Tinh chất gen** (`js/systems/essence.js`, đang TẮT): phân rã vật có gen → tinh chất; tiêm tinh chất vào vật thường → có tỉ lệ gắn gen. Module này cắm vào game hoàn toàn qua hooks, số liệu ở `balance.essence`. Bật bằng `features.geneEssence = true` hoặc trong bảng Dev.
 - **Lưu game:** `NOA.save` có adapter đổi được (mặc định localStorage). Muốn lưu đám mây chỉ cần viết adapter `get/set/remove`. Có `saveVersion` và bảng **migrations** để nâng cấp save cũ.
 - **Thêm nội dung:** loài mới = 1 dòng `content.species` + 3 sản phẩm + 1 dòng `balance.species` + tên ở 2 file i18n. Gen mới = 1 dòng `content.genes` (có `parents` nếu là gen dung hợp). Linh vật mới = `content.mascots` + `balance.mascots.effects`.
@@ -434,8 +494,8 @@ config/  →  js/core (noa: util, rng, events, hooks, MODS)  →  js/systems (lo
 
 ## 19. Lộ trình gợi ý & rủi ro
 **Bước tiếp theo**
-1. Playtest prototype: đo thời gian tới gen đầu tiên, tới cấp 5, tần suất kẹt bàn.
-2. Chốt engine sản phẩm thật (Unity / Cocos / web). `config/*` và `i18n/*` chuyển nguyên trạng.
+1. Playtest prototype: đo thời gian tới gen đầu tiên, tới cấp 5, tần suất kho đầy, số hạt dư mỗi giờ.
+2. Chốt engine sản phẩm thật (đề xuất ở §20). `config/*` và `i18n/*` chuyển nguyên trạng.
 3. Thay emoji bằng art thật (cùng id), giữ ngôn ngữ hình viền mực dày.
 4. Server: tài khoản, lưu đám mây, xác thực thanh toán, chống gian lận (tỉ lệ gacha phải roll trên server ở bản thật).
 5. LiveOps: sự kiện theo mùa (Trung Thu, Tết), hội chợ giống (bảng xếp hạng siêu giống).
@@ -443,5 +503,61 @@ config/  →  js/core (noa: util, rng, events, hooks, MODS)  →  js/systems (lo
 **Rủi ro & cách giảm**
 - **Gen quá khó lấy làm người chơi nản:** có gen đầu tiên chắc chắn, bảng xem trước tỉ lệ, gen lặn, bùa may mắn. Theo dõi số liệu "thời gian tới gen đầu tiên".
 - **Lạm phát Xu từ hàng gen:** bão hòa thị trường, chi phí Viện tăng mạnh, hạt siêu giống khó nhân bản.
-- **Bàn bị nghẽn:** kho chứa, đóng gói sản lượng, bán nhanh, khóa vật.
+- **Kho đầy / hạt dư:** giỏ hạt chờ, cảnh báo trước khi mất, nút bán nhanh hạt Lv1 thường (giữ 2 mỗi loài), nâng kho, khóa vật quý.
 - **Pháp lý gacha:** công bố tỉ lệ (đã có), pity, không bán hộp cho trẻ em ở thị trường cấm. Roll phải nằm trên server ở bản phát hành.
+
+---
+
+## 20. Đề xuất tech stack cho bản mobile
+
+**Mục tiêu:** chạy mượt 60 khung hình/giây trên máy Android tầm trung và thấp, nhẹ (dung lượng tải, RAM, pin), **chơi offline và lưu dữ liệu trong máy**, chuyển được nhiều nhất phần đã làm ở prototype.
+
+### 20.1 Đề xuất chính: **Cocos Creator 3.8 (bản LTS) + TypeScript**
+- Engine chuyên game 2D trên di động, xuất Android / iOS / Web / mini-game từ một mã nguồn. Bản build 2D thường nhẹ hơn Unity đáng kể.
+- **Tái sử dụng tối đa prototype:** toàn bộ `config/`, `i18n/` và `js/systems/` (logic không phụ thuộc DOM) chuyển sang TypeScript gần như 1:1. Chỉ phải làm lại lớp giao diện (`js/ui/`) bằng scene và prefab của Cocos.
+- Có sẵn editor cảnh / prefab / animation, đóng gói texture atlas tự động, hỗ trợ Spine và DragonBones cho hoạt ảnh xương (con vật, robot Đậu), hệ hạt (particle) 2D.
+- Miễn phí; nhiều studio ở Việt Nam và châu Á dùng nên dễ tuyển người.
+- Lưu dữ liệu: `sys.localStorage` cho dữ liệu nhỏ, hoặc ghi file JSON vào `jsb.fileUtils.getWritablePath()` cho save chính (xem 20.3).
+
+### 20.2 Phương án khác
+| | Cocos Creator 3.8 + TS | Unity 6 LTS (2D) + C# | Godot 4 | Flutter (Flame) / React Native / WebView |
+|---|---|---|---|---|
+| Hiệu năng 2D trên máy yếu | Tốt | Tốt | Tốt | Trung bình – kém (giật khi nhiều hạt, kéo thả) |
+| Dung lượng bản build 2D (ước lượng) | nhẹ | nặng hơn (runtime lớn) | nhẹ – vừa | nhẹ |
+| Dùng lại logic JS của prototype | **Rất cao** (TS) | Viết lại sang C# | Viết lại (GDScript / C#) | Cao (JS / Dart phải viết lại) |
+| SDK (IAP, quảng cáo, Firebase) | Khá, có plugin | **Mạnh nhất** | Trung bình | Khá |
+| Chi phí | Miễn phí | Miễn phí dưới ngưỡng doanh thu của gói Personal | Miễn phí (MIT) | Miễn phí |
+| Khi nào nên chọn | Đội nhỏ, muốn ra nhanh từ prototype này | Đội đã quen Unity, cần nhiều SDK, có kế hoạch 3D | Thích mã nguồn mở hoàn toàn | **Không khuyến nghị** cho game merge kéo thả nhiều hiệu ứng |
+
+*Defold* (Lua) cũng rất nhẹ và nhanh, phù hợp nếu đội quen Lua.
+
+### 20.3 Lưu dữ liệu trong máy (offline-first)
+1. **Định dạng:** một file JSON (khoảng 5–50 KB), có `saveVersion` và bảng **migrations** như prototype (`js/core/save.js`).
+2. **Ghi an toàn:** gom ghi sau ~0,4 giây và ghi ngay khi app vào nền (onPause / visibility); **ghi nguyên tử** (ghi file tạm rồi đổi tên) và giữ 1 bản sao lưu; thêm **checksum** (CRC32 hoặc HMAC) để phát hiện file hỏng / bị sửa, hỏng thì tự quay về bản sao lưu.
+3. **Vị trí:** Cocos: thư mục ghi được của ứng dụng; Unity: `Application.persistentDataPath`. Không nhét save lớn vào PlayerPrefs.
+4. **Tiến trình khi tắt app:** mọi đồng hồ (ruộng, chuồng, xưởng, tàu) lưu **mốc thời gian tuyệt đối** như prototype, nên mở lại là thấy cây đã chín. **Chống chỉnh giờ:** lưu "lần cuối thấy giờ"; nếu giờ máy lùi quá ngưỡng thì tạm dừng phần thưởng theo ngày cho tới khi giờ bắt kịp; khi có mạng thì lấy giờ server cho quà đăng nhập.
+5. **Lưu đám mây (sau này):** Google Play Games Saved Games / iCloud hoặc server riêng, dùng đúng giao diện adapter `get / set / remove` đã có (`NOA.save.setAdapter`).
+6. Mã hóa nhẹ phía client chỉ chống sửa file "cho vui"; thứ có giá trị thật (Ngọc mua bằng tiền) phải xác thực ở server.
+
+### 20.4 Tối ưu tài nguyên & độ mượt
+- **Đồ họa:** texture atlas theo khu bản đồ; nén ASTC (iOS, Android đời mới) và ETC2 dự phòng; ảnh tối đa 2048 px; hai bộ độ phân giải (thường / HD).
+- **Draw call:** gom sprite cùng atlas, bong bóng trạng thái và chữ dùng chung atlas / font bitmap; mục tiêu < 50 draw call trên bản đồ.
+- **Bản đồ:** chỉ cập nhật đối tượng trong khung nhìn (culling), camera có quán tính; đồng hồ cập nhật 4 lần/giây như prototype thay vì mỗi khung hình.
+- **Bộ nhớ:** pool đối tượng cho hạt, chữ bay, xu bay; tránh tạo object mỗi khung hình; tải khu bản đồ theo nhu cầu. Mục tiêu RAM < 300 MB trên máy yếu.
+- **Hoạt ảnh:** Spine cho con vật và Đậu (nhẹ hơn ảnh từng khung); hiệu ứng merge bằng particle + tween.
+- **Âm thanh:** SFX ngắn (OGG / M4A) + 1 bản nhạc stream; giữ ý tưởng "mỗi merge một nốt nhạc" bằng các mẫu âm theo cao độ.
+- **Chữ tiếng Việt:** font SDF / bitmap tạo từ Baloo 2, Nunito, Coiny với đủ bộ ký tự có dấu (kiểm tra tự động như `tests/smoke.mjs`).
+- **Pin:** giảm FPS xuống 30 khi không có tương tác, dừng render khi app ở nền.
+- **Dung lượng tải:** Android App Bundle + Play Asset Delivery cho phần nghệ thuật lớn.
+
+### 20.5 Dịch vụ & công cụ
+- **Phân tích & lỗi:** Firebase Analytics + Crashlytics (đo thời gian tới gen đầu tiên, tỉ lệ kho đầy, hạt bị mất).
+- **Cân bằng từ xa:** Firebase Remote Config hoặc file `balance.json` tải về, vì mọi số đã tách khỏi code.
+- **Thanh toán:** Google Play Billing và StoreKit 2. Game chơi offline một người có thể xác thực hóa đơn tại máy ở giai đoạn đầu, nhưng nên chuyển sang **xác thực ở server** (luồng `createOrder → pay → verify → grant` đã dựng ở §12.3) trước khi phát hành rộng.
+- **Kiểm thử:** unit test cho logic (Jest cho TS), mô phỏng tỉ lệ như `tools/simulate.mjs`, kiểm thử giao diện tự động.
+
+### 20.6 Lộ trình chuyển đổi gợi ý
+1. **Giai đoạn 1:** dựng dự án Cocos, port `config/`, `i18n/`, `js/systems/` sang TS kèm unit test; lưu file JSON trong máy.
+2. **Giai đoạn 2:** làm lại giao diện: scene bản đồ (các khu, camera), bàn merge kéo thả, bảng chuồng / xưởng / tàu, HUD.
+3. **Giai đoạn 3:** nghệ thuật thật thay emoji (giữ nguyên id), Spine, âm thanh, hiệu ứng.
+4. **Giai đoạn 4:** IAP sandbox, Analytics, Crashlytics, Remote Config, thử nghiệm kín trên máy Android tầm thấp.

@@ -88,13 +88,59 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       ST.applyFocus();
       NOA.save.schedule();
     },
+    /**
+     * Highlight what the current step needs. On the farm map the camera flies to it once per step;
+     * on other screens the matching button / item pulses.
+     */
     applyFocus() {
       document.querySelectorAll('.tut-focus').forEach((el) => el.classList.remove('tut-focus'));
       const st = ST.current();
-      if (!st || !st.focus) return;
-      let el = document.getElementById(st.focus);
-      if (el && el.classList.contains('hscroll')) el = el.firstElementChild;
-      if (el) el.classList.add('tut-focus');
+      ST.banner(st);
+      if (!st) return;
+      const el = ST.focusTarget(st);
+      if (!el) return;
+      el.classList.add('tut-focus');
+      if (UI.current === 'farm' && ST._flown !== st.id + ':farm') {
+        ST._flown = st.id + ':farm';
+        // let the reward effects of the step that just finished play out before the camera moves,
+        // and never pull the map from under a finger that is dragging it
+        const MV = NOA.ui.screens.farm;
+        const go = () => { if (MV.busy()) setTimeout(go, 400); else MV.reveal(el, true); };
+        setTimeout(go, 900);
+      }
+    },
+    /** Off the farm map Bean is not visible, so the current tip sits at the top of the screen */
+    banner(st) {
+      document.querySelectorAll('.tut-banner').forEach((el) => el.remove());
+      if (!st || UI.current === 'farm') return;
+      const root = document.getElementById('scr-' + UI.current);
+      if (!root) return;
+      root.prepend(h('div', { class: 'tut-banner', role: 'status' }, h('span', { class: 'tb-bean', 'aria-hidden': 'true' }, '🌱'), h('span', null, t('tut.' + st.id))));
+    },
+    focusTarget(st) {
+      const scr = UI.current;
+      const byId = (id) => document.getElementById(id);
+      if (scr === 'farm') return byId(st.focus);
+      if (scr === 'breed') {
+        const grid = NOA.ui.screens.breed.grid;
+        const cells = S()[grid].cells;
+        if (st.id === 'merge') {
+          for (let i = 0; i < cells.length; i++) {
+            for (let j = i + 1; j < cells.length; j++) if (NOA.items.canMerge(cells[i], cells[j])) return byId('gi-' + grid + '-' + i);
+          }
+        }
+        if (st.id === 'animal' && grid === 'nursery') {
+          const i = cells.findIndex((x) => x && x.species === 'chicken');
+          if (i >= 0) return byId('gi-' + grid + '-' + i);
+        }
+        if (st.id === 'animal' && grid === 'vault') return document.querySelector('#scr-breed .seg button:last-child');
+        return null;
+      }
+      if (scr === 'orders' && st.id === 'order') {
+        const o = S().orders.find((x) => NOA.orders.canDeliver(x));
+        return o ? document.querySelector('#order-' + o.id + ' .btn--leaf') : null;
+      }
+      return null;
     },
     init() {
       NOA.events.on('*', (name) => {
@@ -104,28 +150,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         tu.counts[st.id] = (tu.counts[st.id] || 0) + 1;
         if (tu.counts[st.id] >= (st.count || 1)) setTimeout(ST.advance, 350);
       });
-      // While the tutorial runs, keep one easy order (1 Rice Sheaf) on the board
+      // While the tutorial runs, keep one easy order (2 Rice Sheaves — the starter barn has 3) on the board
       NOA.hooks.add('order.generated', (o) => {
         const tu = S().tutorial;
-        const orderStep = ST.steps().findIndex((s) => s.id === 'order');
+        const orderStep = ST.steps().findIndex((x) => x.id === 'order');
         if (!NOA.FEATURES.tutorial || tu.done || tu.step > orderStep) return o;
-        const hasEasy = S().orders.some((x) => x.lines.length === 1 && x.lines[0].product === 'rice_1' && x.lines[0].count === 1);
-        if (!hasEasy && !o.vip) {
-          o.lines = [{ product: 'rice_1', count: 1, filled: 0, minStars: 0, needGene: false }];
-          o.earth = false;
-        }
+        const hasEasy = S().orders.some((x) => x.lines.length === 1 && x.lines[0].product === 'rice_1' && x.lines[0].count <= 2);
+        if (!hasEasy && !o.vip) o.lines = [{ product: 'rice_1', count: 2, filled: 0, minStars: 0, needGene: false }];
         return o;
-      });
-      // During the first steps the seed sack always gives rice (so the first merge is guaranteed)
-      // and the first animal is a chicken (fed with rice).
-      NOA.hooks.add('spawn.species', (sp, info) => {
-        if (sp) return sp;
-        const st = ST.current();
-        if (!st) return sp;
-        const early = ['tap', 'merge', 'plant', 'harvest', 'order'];
-        if (info.family === 'plant' && early.indexOf(st.id) >= 0) return 'rice';
-        if (info.family === 'animal' && (st.id === 'animal' || st.id === 'feed')) return 'chicken';
-        return sp;
       });
     }
   };

@@ -1,6 +1,6 @@
 /*
- * Genetics: merge resolution for seeds / animals / products, gene inheritance,
- * fusion, purity, recessive genes, breakthrough, and the pre-merge preview.
+ * Genetics: merge resolution for seeds / animals, gene inheritance, fusion, purity,
+ * recessive genes, breakthrough, offspring (harvest seeds / young animals) and the pre-merge preview.
  *
  * Rules (from the design):
  *   - max 1 gene per item, plant genes only on plants, animal genes only on animals
@@ -201,36 +201,31 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       return out;
     },
 
-    /** Merge two products (same product) -> next processed tier, always succeeds */
-    mergeProduct(a, b) {
-      const ctx = G.ctxFor(a, b, 'product');
-      const fx = [];
-      const p = C().products[a.product];
-      const next = C().species[p.species].products[p.tier];
-      let stars = Math.round(((a.stars || 1) + (b.stars || 1)) / 2);
-      if (stars < 5 && U.chance(B().product.starUpChanceOnMerge)) { stars += 1; fx.push({ type: 'starUp', stars }); }
-      let gene = null;
-      const ch = G.chances(a, b, ctx);
-      if (a.gene && b.gene) {
-        if (a.gene.id === b.gene.id) {
-          if (U.chance(ch.keepSame)) gene = { id: a.gene.id, purity: Math.max(a.gene.purity, b.gene.purity) };
-          else fx.push({ type: 'geneLost', gene: a.gene.id });
-        } else {
-          const win = G.better(a.gene, b.gene);
-          if (U.chance(ch.keepDiff)) gene = { id: win.id, purity: win.purity };
-          else fx.push({ type: 'geneLost', gene: win.id });
-        }
-      } else if (a.gene || b.gene) {
-        const one = a.gene || b.gene;
-        if (U.chance(ch.keepNormal)) gene = { id: one.id, purity: Math.max(1, one.purity - B().gene.purityLossWithNormal) };
-        else fx.push({ type: 'geneLost', gene: one.id });
-      }
-      const item = I().newProduct(next, stars, gene);
-      return NOA.hooks.run('merge.result', { item, fx, a, b, ctx });
-    },
+    merge(a, b, opts) { return G.mergeBreed(a, b, opts); },
 
-    merge(a, b, opts) {
-      return I().isBreed(a) ? G.mergeBreed(a, b, opts) : G.mergeProduct(a, b);
+    /**
+     * Next-generation breed born from a harvest (seeds) or a production cycle (young animals).
+     * Level drops (Lv5 parent -> Lv3 child), stats are inherited at ~75% with mutation,
+     * the gene passes on with a chance (purity -1) or sinks into a recessive gene.
+     */
+    offspring(parent) {
+      const cfg = B().harvest.seeds;
+      const level = Math.max(1, parent.level - cfg.levelDrop);
+      const cap = B().merge.statCapByLevel[level] || 100;
+      const stats = {};
+      for (const s of I().STATS) {
+        stats[s] = U.clamp(Math.round(parent.stats[s] * cfg.inheritRatio + U.randInt(-cfg.mutation, cfg.mutation)), 1, cap);
+      }
+      let gene = null, carrier = null;
+      const ctx = { family: I().family(parent), items: [parent], charms: [], op: 'offspring' };
+      if (parent.gene) {
+        if (U.chance(NOA.mods.chance('gene.inherit', cfg.geneInherit, ctx))) {
+          gene = { id: parent.gene.id, purity: Math.max(1, parent.gene.purity - 1) };
+        } else if (U.chance(cfg.carrierFromGene)) carrier = parent.gene.id;
+      } else if (parent.carrier && U.chance(cfg.carrierInherit)) {
+        carrier = parent.carrier;
+      }
+      return I().newBreed(parent.species, level, { stats, gene, carrier });
     },
 
     /** Luck boosters attached to the merging items */
@@ -263,7 +258,6 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (L.spawnAdd) out.push({ key: 'gene.spawn', add: L.spawnAdd, src, id, lv });
       if (L.breakAdd) out.push({ key: 'merge.breakthrough', add: L.breakAdd, src, id, lv });
       if (L.discoveryAdd) out.push({ key: 'hybrid.discovery', add: L.discoveryAdd, src, id, lv });
-      if (L.lv2Spawn) out.push({ key: 'gen.lv2', add: L.lv2Spawn, src, id, lv });
       return out;
     }
   };
@@ -277,16 +271,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     preview(a, b) {
       const rows = [];
       if (!I().canMerge(a, b)) return rows;
-      const ctx = G.ctxFor(a, b, I().isBreed(a) ? 'merge' : 'product');
+      const ctx = G.ctxFor(a, b, 'merge');
       const ch = G.chances(a, b, ctx);
-      if (a.kind === 'product') {
-        const p = C().products[a.product];
-        rows.push({ k: 'preview.process', p: 1, params: { name: NOA.t('product.' + C().species[p.species].products[p.tier]) } });
-        rows.push({ k: 'preview.starUp', p: B().product.starUpChanceOnMerge });
-        if (a.gene && b.gene) rows.push({ k: 'preview.keepGene', p: a.gene.id === b.gene.id ? ch.keepSame : ch.keepDiff });
-        else if (a.gene || b.gene) rows.push({ k: 'preview.keepGene', p: ch.keepNormal });
-        return rows;
-      }
       const m = B().merge;
       rows.push({ k: 'preview.levelUp', p: 1, params: { level: a.level + 1 } });
       if (a.level + 2 <= m.maxLevel) {

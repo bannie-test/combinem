@@ -1,5 +1,5 @@
 /*
- * Orders (Township-style board): customers ask for processed products.
+ * 📋 Order board (Hay Day truck orders): customers ask for raw and processed goods from the barn.
  * Rewards scale with the real value of what you deliver, so better stars / genes pay more.
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
@@ -19,169 +19,128 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   };
 
   const O = NOA.orders = {
-    unlockedSpecies() {
-      const out = [];
+    /** Goods the player can currently obtain, grouped by tier */
+    available() {
+      const out = { 1: [], 2: [], 3: [] };
       for (const id in C().species) {
         const sp = C().species[id];
-        if (!sp.hybrid && B().species[id].unlockLevel <= S().level) out.push(id);
+        if (sp.hybrid || !NOA.progress.speciesUnlocked(id)) continue;
+        if (sp.bed === 'flower' && !NOA.progress.isUnlocked('flowers')) continue;
+        out[1].push(sp.products[0]);
+      }
+      for (const pid in B().recipes) {
+        if (NOA.production.recipeUnlocked(pid)) out[I().tierOf(pid)].push(pid);
       }
       return out;
+    },
+    pickGoods(tierWeights, n, exclude) {
+      const avail = O.available();
+      const lines = [];
+      const used = new Set(exclude || []);
+      for (let i = 0; i < n; i++) {
+        const w = {};
+        [1, 2, 3].forEach((t) => { if (avail[t].some((p) => !used.has(p))) w[t] = tierWeights[t - 1]; });
+        const tier = Number(U.pickWeighted(w));
+        if (!tier) break;
+        const pool = avail[tier].filter((p) => !used.has(p));
+        const pid = U.pick(pool);
+        used.add(pid);
+        lines.push({ product: pid, tier });
+      }
+      return lines;
     },
     generate() {
       const o = B().orders;
       const lvl = S().level;
       const isVip = lvl >= o.vip.unlockLevel && U.chance(o.vip.chance);
-      const isEarth = !isVip && lvl >= o.earth.unlockLevel && U.chance(o.earth.chance);
-      const maxLines = lastByLevel(o.linesByLevel, lvl).max;
-      const nLines = isVip ? 1 : U.randInt(1, maxLines);
-      const tierW = lastByLevel(o.tierWeightsByLevel, lvl).weights;
-      const pool = U.shuffle(O.unlockedSpecies().slice());
-      const lines = [];
-      for (let i = 0; i < nLines && i < pool.length; i++) {
-        const sp = pool[i];
-        const tw = { 1: tierW[0], 2: tierW[1], 3: tierW[2] };
-        let tier = Number(U.pickWeighted(tw)) || 1;
-        if (isVip) tier = Math.min(tier, 2);
-        const line = {
-          product: C().species[sp].products[tier - 1],
-          count: isVip ? 1 : U.randInt(o.countRange[0], tier === 3 ? 1 : o.countRange[1]),
-          filled: 0,
-          minStars: 0,
-          needGene: false
-        };
+      const nLines = isVip ? 1 : U.randInt(1, lastByLevel(o.linesByLevel, lvl).max);
+      const tw = lastByLevel(o.tierWeightsByLevel, lvl).weights;
+      const picks = O.pickGoods(isVip ? [tw[0], tw[1], 0] : tw, nLines);
+      const lines = picks.map((p) => {
+        const r = o.countByTier[p.tier];
+        const line = { product: p.product, count: isVip ? 1 : U.randInt(r[0], r[1]), filled: 0, minStars: 0, needGene: false };
         if (isVip) {
           if (U.chance(o.vip.requireGeneChance)) line.needGene = true;
           else line.minStars = o.vip.minStars;
         }
-        lines.push(line);
-      }
+        return line;
+      });
       const npcs = Object.keys(C().npcs).filter((id) => !C().npcs[id].vip && !C().npcs[id].earth);
       return NOA.hooks.run('order.generated', {
         id: U.uid('o'),
-        npc: isVip ? 'traveler' : isEarth ? 'na' : U.pick(npcs),
+        npc: isVip ? 'traveler' : U.pick(npcs),
         vip: isVip,
-        earth: isEarth,
         lines,
-        value: 0,
         createdAt: NOA.time.now()
       });
     },
     fill() {
       const s = S();
       let added = false;
-      while (s.orders.length < B().orders.slots) { s.orders.push(O.generate()); added = true; }
+      while (s.orders.length < B().orders.slots) {
+        const o = O.generate();
+        if (!o.lines.length) break;
+        s.orders.push(o);
+        added = true;
+      }
       if (added) { NOA.events.emit('orders.changed', {}); NOA.save.schedule(); }
     },
-    matches(item, line) {
-      if (!item || item.kind !== 'product' || item.locked || item.product !== line.product) return false;
-      if (line.minStars && (item.stars || 1) < line.minStars) return false;
-      if (line.needGene && !item.gene) return false;
-      return true;
-    },
-    /** For each unfilled line, the cheapest matching board items. null if not enough. */
-    plan(order) {
-      const used = new Set();
-      const picks = [];
-      for (const line of order.lines) {
-        const need = line.count - line.filled;
-        if (need <= 0) continue;
-        const cands = [];
-        S().board.forEach((it, i) => { if (!used.has(i) && O.matches(it, line)) cands.push(i); });
-        cands.sort((x, y) => I().value(S().board[x]) - I().value(S().board[y]));
-        if (cands.length < need) return null;
-        for (let k = 0; k < need; k++) { used.add(cands[k]); picks.push({ line, index: cands[k] }); }
-      }
-      return picks;
-    },
-    /** Per line: how many matching items the board holds right now (for checkmarks) */
+    req(line) { return { minStars: line.minStars || 0, needGene: !!line.needGene }; },
     availability(order) {
-      return order.lines.map((line) => {
-        let n = 0;
-        S().board.forEach((it) => { if (O.matches(it, line)) n += 1; });
-        return Math.min(line.count - line.filled, n);
-      });
+      return order.lines.map((l) => Math.min(l.count, NOA.barn.count(l.product, O.req(l))));
     },
-    canDeliver(order) { return !!O.plan(order); },
+    canDeliver(order) { return order.lines.every((l) => NOA.barn.has(l.product, l.count, O.req(l))); },
     deliver(orderId) {
       const order = S().orders.find((o) => o.id === orderId);
-      if (!order) return null;
-      const picks = O.plan(order);
-      if (!picks) return null;
-      const indices = [];
-      for (const p of picks) {
-        const it = S().board[p.index];
-        order.value += I().value(it);
-        p.line.filled += 1;
-        S().board[p.index] = null;
-        indices.push(p.index);
+      if (!order || !O.canDeliver(order)) return null;
+      let value = 0;
+      for (const l of order.lines) {
+        const taken = NOA.barn.take(l.product, l.count, O.req(l));
+        taken.forEach((t) => { value += t.value * t.n; });
+        l.filled = l.count;
       }
-      NOA.board.changed({ removed: indices });
-      return O.complete(order, indices);
-    },
-    /** Drag a single product onto an order card */
-    deliverItem(orderId, boardIdx) {
-      const order = S().orders.find((o) => o.id === orderId);
-      const it = S().board[boardIdx];
-      if (!order || !it) return null;
-      const line = order.lines.find((l) => l.filled < l.count && O.matches(it, l));
-      if (!line) return null;
-      line.filled += 1;
-      order.value += I().value(it);
-      S().board[boardIdx] = null;
-      NOA.board.changed({ removed: [boardIdx] });
-      if (order.lines.every((l) => l.filled >= l.count)) return O.complete(order, [boardIdx]);
-      NOA.events.emit('orders.changed', {});
-      return { partial: true };
+      return O.complete(order, value);
     },
     estimate(order) {
       let v = 0;
-      for (const line of order.lines) {
-        const gene = line.needGene ? { id: O.anyGeneFor(line.product), purity: 1 } : null;
-        v += I().productValue(line.product, Math.max(1, line.minStars || 1), gene) * line.count;
+      for (const l of order.lines) {
+        const gene = l.needGene ? { id: Object.keys(B().gene.spawnWeights[O.familyOf(l.product)])[0], purity: 1 } : null;
+        v += I().productValue(l.product, Math.max(1, l.minStars || 1), gene) * l.count;
       }
       return O.rewardFor(order, v);
     },
-    anyGeneFor(productId) {
-      const fam = C().species[C().products[productId].species].family;
-      return Object.keys(B().gene.spawnWeights[fam])[0];
-    },
+    familyOf(pid) { return C().species[I().productSpecies(pid)].family; },
     rewardFor(order, value) {
       const o = B().orders;
       const coins = Math.round(value * o.rewardMult * (order.vip ? o.vip.rewardMult : 1) * NOA.mods.value('coins.mult', 1, {}));
       return { coins, xp: Math.max(o.minXP, Math.round(coins * o.xpPerCoin)) };
     },
-    complete(order, indices) {
+    complete(order, value) {
       const o = B().orders;
       const est = O.estimate(order);
-      const r = O.rewardFor(order, order.value);
-      const reward = { coins: Math.max(r.coins, est.coins), xp: Math.max(r.xp, est.xp) };
+      const r = O.rewardFor(order, value);
+      const reward = { coins: Math.max(r.coins, est.coins) };
+      const xp = Math.max(r.xp, est.xp);
       if (order.vip) {
         reward.rp = U.randInt(o.vip.rpRange[0], o.vip.rpRange[1]);
         if (U.chance(o.vip.gemChance)) reward.gems = U.randInt(o.vip.gemRange[0], o.vip.gemRange[1]);
       }
-      if (order.earth) reward.rp = (reward.rp || 0) + o.earth.rp;
       const s = S();
       s.orders = s.orders.filter((x) => x.id !== order.id);
       s.orderRefillAt = NOA.time.now() + NOA.time.dur(o.refillDelaySec);
       s.stats.orders += 1;
-      const xp = reward.xp;
-      delete reward.xp;
       const granted = NOA.rewards.grant(reward, 'order');
-      if (order.earth) {
-        s.earth = Math.min(B().world.earth.maxProgress, s.earth + o.earth.progress);
-        NOA.events.emit('earth.changed', { earth: s.earth });
-      }
       NOA.progress.addXP(xp);
-      NOA.events.emit('order.complete', { order, reward: Object.assign({ xp }, reward), granted, indices });
+      NOA.events.emit('order.complete', { order, reward: Object.assign({ xp }, reward), granted });
       NOA.events.emit('orders.changed', {});
       NOA.save.schedule();
       return { complete: true, reward: Object.assign({ xp }, reward) };
     },
-    canSwap(order) { return order.lines.every((l) => l.filled === 0) && NOA.time.now() >= S().orderSwapAt; },
+    canSwap() { return NOA.time.now() >= S().orderSwapAt; },
     swap(orderId) {
       const s = S();
       const i = s.orders.findIndex((o) => o.id === orderId);
-      if (i < 0 || !O.canSwap(s.orders[i])) return false;
+      if (i < 0 || !O.canSwap()) return false;
       s.orders[i] = O.generate();
       s.orderSwapAt = NOA.time.now() + NOA.time.dur(B().orders.swapCooldownSec);
       NOA.events.emit('orders.changed', {});

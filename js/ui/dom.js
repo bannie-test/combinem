@@ -1,5 +1,5 @@
 /*
- * UI helpers: element builder, item art, modals, toasts, cost / reward labels, screens & tab bar.
+ * UI helpers: element builder, item / goods art, modals, toasts, cost / reward labels, screens & tab bar.
  */
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
@@ -53,7 +53,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   UI.compact = (n) => NOA.i18n.compact(n);
   UI.pct = (p) => NOA.util.pct(p);
   UI.dur = (ms) => NOA.util.fmtDuration(ms);
-  const COST_ICON = { coins: '🪙', gems: '💎', rp: '🔬', energy: '⚡' };
+  const COST_ICON = { coins: '🪙', gems: '💎', rp: '🔬' };
   UI.cost = function (cost) {
     const parts = [];
     for (const k in cost || {}) {
@@ -67,10 +67,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     if (!r) return out;
     if (r.coins) out.push({ icon: '🪙', n: r.coins });
     if (r.gems) out.push({ icon: '💎', n: r.gems });
-    if (r.energy) out.push({ icon: '⚡', n: r.energy });
     if (r.rp) out.push({ icon: '🔬', n: r.rp });
     for (const k in r.tickets || {}) out.push({ icon: '🎟️', n: r.tickets[k], label: t('ticket.' + k) });
     for (const k in r.boosters || {}) out.push({ icon: C().boosters[k].emoji, n: r.boosters[k], label: t('booster.' + k) });
+    for (const k in r.materials || {}) out.push({ icon: C().materials[k].emoji, n: r.materials[k], label: t('material.' + k) });
+    for (const k in r.products || {}) out.push({ icon: C().products[k].emoji, n: r.products[k], label: t('product.' + k) });
+    for (const sp of (r.seeds || []).concat(r.animals || [])) out.push({ icon: C().species[sp.species].emoji, n: 1, label: t('species.' + sp.species) + ' Lv' + (sp.level || 1) });
+    if (r.vault) out.push({ icon: '🌰', n: r.vault, label: t('res.vault') });
+    if (r.nursery) out.push({ icon: '🐣', n: r.nursery, label: t('res.nursery') });
     if (r.mascot) out.push({ icon: C().mascots[r.mascot].emoji, n: 1, label: t('mascot.' + r.mascot) });
     return out;
   };
@@ -107,12 +111,25 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     if (e2) el.append(UI.h('span', { class: 'emo2' }, e2));
     if (opts.badges === false) return el;
     if (I().isBreed(item)) el.append(UI.h('span', { class: 'b-lv' }, item.level));
-    if (item.kind === 'product' && (item.stars || 1) > 1) el.append(UI.h('span', { class: 'b-st' }, item.stars + '★'));
-    if (item.kind === 'generator') el.append(UI.h('span', { class: 'b-en' }, NOA.BALANCE.generators[item.generator].energy + '⚡'));
     if (gene) el.append(UI.h('span', { class: 'b-gene' }, gene.emoji));
     else if (item.revealed && item.carrier) el.append(UI.h('span', { class: 'b-carrier', title: t('item.carrier', { gene: t('gene.' + item.carrier) }) }, C().genes[item.carrier].emoji));
     if (item.charm) el.append(UI.h('span', { class: 'b-charm' }, C().boosters[item.charm].emoji));
     if (item.locked) el.append(UI.h('span', { class: 'b-lock' }, '🔒'));
+    return el;
+  };
+
+  /** Barn goods (product / material stack): emoji + stars + gene badge */
+  UI.goodArt = function (pid, stars, gene, opts) {
+    opts = opts || {};
+    const g = gene ? C().genes[gene.id] : null;
+    const style = {};
+    if (g) style['--gc'] = g.color;
+    if (opts.size) style['--sz'] = opts.size + 'px';
+    const el = UI.h('div', { class: 'art art--good' + (g ? ' has-gene gt-' + g.tier : ''), style },
+      UI.h('span', { class: 'emo' }, I().goodEmoji(pid)));
+    if (opts.badges === false) return el;
+    if ((stars || 1) > 1) el.append(UI.h('span', { class: 'b-st' }, stars + '★'));
+    if (g) el.append(UI.h('span', { class: 'b-gene' }, g.emoji));
     return el;
   };
 
@@ -178,20 +195,22 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   UI.current = 'farm';
   const TABS = [
     { id: 'farm', icon: '🌾' },
-    { id: 'labs', icon: '🔬' },
-    { id: 'gacha', icon: '🎁' },
-    { id: 'shop', icon: '🛒' },
-    { id: 'codex', icon: '📖' }
+    { id: 'orders', icon: '📋' },
+    { id: 'breed', icon: '🧬' },
+    { id: 'barn', icon: '📦' },
+    { id: 'shop', icon: '🛒' }
   ];
+  // screens without a tab button (opened from buildings / the HUD)
+  const EXTRA = ['codex'];
 
   UI.mount = function () {
     const app = document.getElementById('app');
     UI.clear(app);
     app.className = 'app';
     app.append(
-      UI.h('header', { class: 'sky', id: 'sky' }),
+      UI.h('header', { class: 'hud-bar', id: 'hud' }),
       UI.h('main', { class: 'screens', id: 'screens' },
-        TABS.map((tb) => UI.h('section', { class: 'screen', id: 'scr-' + tb.id, hidden: tb.id !== UI.current, 'aria-label': t('tab.' + tb.id) }))),
+        TABS.map((tb) => tb.id).concat(EXTRA).map((id) => UI.h('section', { class: 'screen scr-' + id, id: 'scr-' + id, hidden: id !== UI.current, 'aria-label': t('tab.' + id) }))),
       UI.h('nav', { class: 'tabbar', id: 'tabbar', 'aria-label': 'Menu' })
     );
     const ensure = (id, tag) => {
@@ -204,44 +223,71 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     ensure('overlays');
     UI.renderTabs();
   };
+  UI.tabEl = (id) => document.querySelector('#tabbar [data-tab="' + id + '"]');
   UI.renderTabs = function () {
     const nav = document.getElementById('tabbar');
+    if (!nav) return;
+    // update in place when the buttons exist (a rebuild under the finger would eat the tap)
+    if (nav.children.length === TABS.length && nav.dataset.lang === NOA.i18n.lang) {
+      TABS.forEach((tb, i) => {
+        const b = nav.children[i];
+        b.setAttribute('aria-current', tb.id === UI.current ? 'page' : 'false');
+        const badge = UI.tabBadge(tb.id);
+        let dot = b.querySelector('.badge-dot');
+        if (!badge) { if (dot) dot.remove(); return; }
+        if (!dot) { dot = UI.h('span', { class: 'badge-dot' }); b.append(dot); }
+        dot.classList.toggle('n', typeof badge === 'number');
+        dot.textContent = typeof badge === 'number' ? String(badge) : '';
+      });
+      return;
+    }
+    nav.dataset.lang = NOA.i18n.lang;
     UI.clear(nav);
     TABS.forEach((tb) => {
       const b = UI.h('button', {
-        type: 'button', class: 'tab', 'aria-current': tb.id === UI.current ? 'page' : 'false',
+        type: 'button', class: 'tab', data: { tab: tb.id }, 'aria-current': tb.id === UI.current ? 'page' : 'false',
         on: { click: () => { NOA.audio.unlock(); NOA.audio.play('tap'); UI.show(tb.id); } }
       }, UI.h('span', { class: 'ti' }, tb.icon), UI.h('span', null, t('tab.' + tb.id)));
-      if (UI.tabBadge(tb.id)) b.append(UI.h('span', { class: 'badge-dot' }));
+      const badge = UI.tabBadge(tb.id);
+      if (badge) b.append(UI.h('span', { class: 'badge-dot' + (typeof badge === 'number' ? ' n' : '') }, typeof badge === 'number' ? String(badge) : null));
       nav.append(b);
     });
   };
+  /** true / a count when a tab has something waiting */
   UI.tabBadge = function (id) {
-    if (!NOA.state) return false;
-    if (id === 'labs') {
-      return NOA.labs.ids.some((lab) => NOA.labs.isOpen(lab) && NOA.state.labs[lab].slots.some((j) => j && NOA.time.now() >= j.end));
+    const s = NOA.state;
+    if (!s) return false;
+    if (id === 'orders') {
+      const n = s.orders.filter((o) => NOA.orders.canDeliver(o)).length;
+      return n || false;
     }
-    if (id === 'gacha') {
-      return Object.keys(NOA.BALANCE.gacha.boxes).some((b) => NOA.gacha.isUnlocked(b) && (NOA.state.tickets[NOA.BALANCE.gacha.boxes[b].ticket] || 0) > 0);
+    if (id === 'breed') {
+      return NOA.labs.ids.some((lab) => NOA.labs.isOpen(lab) && s.labs[lab].slots.some((j) => j && NOA.time.now() >= j.end));
     }
-    if (id === 'shop') return NOA.payment.monthly.canClaim();
+    if (id === 'barn') return NOA.barn.free() <= 0;
+    if (id === 'shop') {
+      const tickets = Object.keys(NOA.BALANCE.gacha.boxes).some((b) => NOA.gacha.isUnlocked(b) && (s.tickets[NOA.BALANCE.gacha.boxes[b].ticket] || 0) > 0);
+      return tickets || NOA.payment.monthly.canClaim();
+    }
     return false;
   };
-  UI.show = function (id) {
+  UI.show = function (id, opts) {
     UI.current = id;
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== 'scr-' + id; });
     UI.renderTabs();
+    if (NOA.ui.panels) NOA.ui.panels.closeSheet();
     const view = UI.screens[id];
-    if (view && view.render) view.render();
-    if (id !== 'farm' && NOA.ui.panels) NOA.ui.panels.closeSheet();
-    window.scrollTo({ top: 0, behavior: UI.reduced ? 'auto' : 'smooth' });
+    if (view && view.render) view.render(opts);
+    const scr = document.getElementById('screens');
+    if (scr && id !== 'farm') scr.scrollTop = 0;
+    if (NOA.ui.story) NOA.ui.story.applyFocus();
   };
   UI.renderAll = function () {
     UI.renderTabs();
     if (NOA.ui.hud) NOA.ui.hud.render();
     for (const id in UI.screens) {
       const s = document.getElementById('scr-' + id);
-      if (UI.screens[id].render && (!s.hidden || id === 'farm')) UI.screens[id].render();
+      if (s && UI.screens[id].render && (!s.hidden || id === 'farm')) UI.screens[id].render();
     }
   };
 })();

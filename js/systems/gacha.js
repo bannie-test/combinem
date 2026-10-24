@@ -38,7 +38,6 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       if (!GA.isUnlocked(id)) return { ok: false, reason: 'locked' };
       const cost = GA.cost(id, count);
       if (!NOA.res.canAfford(cost)) return { ok: false, reason: 'cost', cost };
-      if (!NOA.board.hasRoom(1)) return { ok: false, reason: 'room' };
       return { ok: true, cost };
     },
 
@@ -109,7 +108,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const w = {};
       for (const id in C().species) {
         const sp = C().species[id];
-        if (sp.family === family && !sp.hybrid && B().species[id].unlockLevel <= Math.max(S().level, 1)) w[id] = B().species[id].spawnWeight;
+        if (sp.family === family && !sp.hybrid && NOA.progress.speciesUnlocked(id)) w[id] = B().gacha.speciesWeights[id] || 0;
       }
       return U.pickWeighted(w);
     },
@@ -136,16 +135,25 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         const item = I().newBreed(species, level, { gene });
         S().discovered.species[species] = true;
         const isNewGene = gene && !S().discovered.genes[gene.id];
-        if (gene) NOA.board.recordGene(gene.id, [], fam);
-        const where = NOA.board.placeOrStore(item, null);
-        return { type: 'item', item, where, isNew: !!isNewGene };
+        if (gene) NOA.grids.recordGene(gene.id, [], fam);
+        const where = NOA.grids.place(item);
+        let refund = 0;
+        if (where === -1) {   // grid full: pay the item's value instead of losing it
+          refund = I().breedValue(item) * 2;
+          NOA.res.add('coins', refund);
+        }
+        return { type: 'item', item, where, refund, isNew: !!isNewGene };
+      }
+      if (def.type === 'material') {
+        NOA.barn.add(def.id, def.qty, { force: true });
+        return { type: 'material', id: def.id, qty: def.qty };
       }
       if (def.type === 'booster') {
         S().boosters[def.id] = (S().boosters[def.id] || 0) + def.qty;
         return { type: 'booster', id: def.id, qty: def.qty };
       }
       if (def.type === 'currency') {
-        const entries = NOA.rewards.grant({ coins: def.coins, gems: def.gems, energy: def.energy }, 'gacha');
+        const entries = NOA.rewards.grant({ coins: def.coins, gems: def.gems }, 'gacha');
         return { type: 'currency', entries };
       }
       if (def.type === 'mascot') {

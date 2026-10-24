@@ -61,7 +61,7 @@ NOA.PAYMENT = {
       priceVND: 49000, priceUSD: 1.99,
       storeIds: { googlePlay: 'noa_starter', appStore: 'com.example.noafarm.starter' } },
     { sku: 'monthly_card', type: 'subscription', badge: 'monthly',
-      grant: { gems: 100 }, daily: { gems: 15, energy: 20 }, durationDays: 30,
+      grant: { gems: 100 }, daily: { gems: 15, boosters: { tonic: 1 } }, durationDays: 30,
       priceVND: 109000, priceUSD: 4.99,
       storeIds: { googlePlay: 'noa_monthly', appStore: 'com.example.noafarm.monthly' } }
   ]

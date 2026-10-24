@@ -1,4 +1,4 @@
-/* Layout: one phone-width column. Sky header (HUD + robot Bean + sky events) → active screen → sticky tab bar.
+/* Layout: one phone-width column. HUD bar → active screen (the farm map fills it) → tab bar.
    Panels are "seed-paper" cards with chunky ink outlines and a pressed-down shadow, like a hand-drawn seed packet. */
 :root {
   --ink: #3a2a4d;
@@ -80,9 +80,10 @@ p { margin: 0; }
   flex-direction: column;
   padding-block: 8px 0;
 }
-/* one-screen app: the screen area scrolls, the sky header and tab bar stay put */
-.screens { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+/* one-screen app: the screen area scrolls, the HUD and tab bar stay put; the farm map fills its screen */
+.screens { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; position: relative; }
 .screen { display: flex; flex-direction: column; gap: 8px; padding-block: 8px 12px; min-height: 100%; }
+.screen.scr-farm { height: 100%; min-height: 0; padding-block: 6px 8px; }
 
 /* ------------------------------------------------------------ buttons */
 .btn {
@@ -185,7 +186,7 @@ p { margin: 0; }
   flex: 0 0 auto;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   background: var(--paper);
   border: var(--line) solid var(--ink);
@@ -210,7 +211,9 @@ p { margin: 0; }
   font-size: 11.5px;
   color: var(--ink-2);
   position: relative;
+  min-width: 0;
 }
+.tab > span:not(.ti):not(.badge-dot) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab .ti { font-size: 22px; line-height: 1.1; transition: transform 0.2s cubic-bezier(.3, 1.6, .5, 1); }
 .tab[aria-current="page"] { background: var(--sun); color: var(--ink); box-shadow: inset 0 0 0 2.5px var(--ink); }
 .tab[aria-current="page"] .ti { transform: translateY(-2px) scale(1.12); }
@@ -223,6 +226,18 @@ p { margin: 0; }
   border-radius: 50%;
   background: var(--berry);
   border: 2px solid var(--ink);
+}
+.tab .badge-dot.n {
+  width: auto;
+  height: auto;
+  min-width: 18px;
+  top: 0;
+  right: 12%;
+  border-radius: 9px;
+  padding: 1px 4px 0;
+  font-size: 10.5px;
+  line-height: 13px;
+  color: #fff;
 }
 
 /* ------------------------------------------------------------ modals */
@@ -259,7 +274,7 @@ p { margin: 0; }
 #toasts {
   position: fixed;
   left: 50%;
-  top: calc(env(safe-area-inset-top, 0px) + 96px);
+  top: calc(env(safe-area-inset-top, 0px) + 150px);
   transform: translateX(-50%);
   z-index: 990;
   display: flex;

@@ -18,6 +18,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   const L = NOA.labs = {
     ids: Object.keys(LABS),
     family(lab) { return LABS[lab]; },
+    grid(lab) { return lab === 'greenhouse' ? 'vault' : 'nursery'; },
     level(lab) { return S().labs[lab].level; },
     data(lab, level) { return B().labs.levels[level != null ? level : L.level(lab)]; },
     isOpen(lab) { return lab === 'greenhouse' || NOA.progress.isUnlocked('ranch'); },
@@ -52,27 +53,27 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     discoveryChance(lab) {
       return NOA.mods.chance('hybrid.discovery', B().hybrid.baseDiscovery, { family: L.family(lab) });
     },
-    /** Board items that may enter a cross-breeding slot for this lab */
+    /** Grid cells (vault / nursery) that may enter a cross-breeding slot for this lab */
     candidates(lab) {
-      const fam = L.family(lab);
       const out = [];
-      S().board.forEach((it, i) => {
-        if (it && I().isBreed(it) && !it.locked && I().family(it) === fam && !C().species[it.species].hybrid) out.push(i);
+      S()[L.grid(lab)].cells.forEach((it, i) => {
+        if (it && I().isBreed(it) && !it.locked && !C().species[it.species].hybrid) out.push(i);
       });
       return out;
     },
     startHybrid(lab, slotIdx, idxA, idxB) {
       const slots = S().labs[lab].slots;
-      const a = S().board[idxA], b = S().board[idxB];
+      const cells = S()[L.grid(lab)].cells;
+      const a = cells[idxA], b = cells[idxB];
       if (!L.hybridOpen(lab) || slots[slotIdx] !== null || slotIdx >= slots.length) return { error: 'slot' };
       if (!a || !b || idxA === idxB || a.species === b.species) return { error: 'pair' };
       if (I().family(a) !== L.family(lab) || I().family(b) !== L.family(lab)) return { error: 'family' };
       if (!NOA.res.spend({ coins: B().hybrid.costCoins })) return { error: 'coins' };
-      S().board[idxA] = null;
-      S().board[idxB] = null;
+      cells[idxA] = null;
+      cells[idxB] = null;
       const now = NOA.time.now();
       slots[slotIdx] = { a, b, start: now, end: now + NOA.time.dur(B().hybrid.durationSec) };
-      NOA.board.changed({ removed: [idxA, idxB] });
+      NOA.grids.changed(L.grid(lab), { removed: [idxA, idxB] });
       NOA.events.emit('lab.changed', { lab });
       return { ok: true };
     },
@@ -80,7 +81,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const slots = S().labs[lab].slots;
       const job = slots[slotIdx];
       if (!job || NOA.time.now() < job.end) return null;
-      if (!NOA.board.hasRoom(1)) return { error: 'full' };
+      if (!NOA.grids.hasRoom(L.grid(lab)) && L.grid(lab) === 'nursery') return { error: 'full' };
       const rec = L.recipe(job.a.species, job.b.species);
       const h = B().hybrid;
       let result;
@@ -100,12 +101,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           S().flags.firstHybrid = true;
           NOA.progress.addXP(B().xp.hybrid);
         }
-        if (item.gene) NOA.board.recordGene(item.gene.id, fx, I().family(item));
-        const where = NOA.board.placeOrStore(item, null);
+        if (item.gene) NOA.grids.recordGene(item.gene.id, fx, I().family(item));
+        const where = NOA.grids.place(item);
         result = { success: true, item, isNew, species: rec.result, where, fx };
       } else {
         const keep = job.a.level >= job.b.level ? job.a : job.b;
-        const where = NOA.board.placeOrStore(keep, null);
+        const where = NOA.grids.place(keep);
         NOA.res.add('rp', h.failRefundRP);
         result = { success: false, item: keep, compatible: !!rec, where, rp: h.failRefundRP };
       }
