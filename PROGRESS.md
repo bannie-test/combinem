@@ -14,5 +14,5 @@ Checklist để tiếp tục công việc nếu phiên bị ngắt.
 - [x] tests/smoke.mjs: 21/21 bước qua
 - [x] docs/GDD.md
 - [x] README.md
-- [ ] Publish artifact + tóm tắt cho user
+- [x] Publish artifact: https://claude.ai/artifact/NG1HrQxXtGhR5JJPiggPAj
 - [ ] Push lên GitHub: bị chặn 403 (Claude GitHub App chưa có quyền với bannie-test/combinem). Commit đang nằm trong máy.
