@@ -157,7 +157,10 @@ NOA.BALANCE = {
     geneProductChance: 0.6,                    // mỗi sản phẩm của giống có gen: 60% mang gen
     geneRP: 1,                                 // mỗi sản phẩm có gen: +1 điểm nghiên cứu
     naturalCloverChance: 0.002,                // nhặt được Cỏ bốn lá khi thu hoạch (bí ẩn)
-    maxProductTier: 3
+    maxProductTier: 3,
+    // Gộp sản lượng thành sản phẩm cấp cao để bàn không bị ngập:
+    // chỉ gộp thành cấp 2 khi 1 lần thu hoạch có >= 4 đơn vị, cấp 3 khi >= 8 đơn vị
+    packFromUnits: { 2: 4, 3: 8 }
   },
 
   /* ---------------------------------------------------------- SẢN PHẨM */
@@ -481,7 +484,8 @@ NOA.BALANCE = {
       bean:      { tickets: { star: 1 } },
       rename:    { gems: 50 },
       clover4:   { gems: 10 },
-      rainbow:   { rp: 15 }
+      rainbow:   { rp: 15 },
+      earthday:  { gems: 22, rp: 22 }   // 22/4 Ngày Trái Đất
     }
   },
 

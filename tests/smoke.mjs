@@ -49,6 +49,9 @@ async function dragTo(fromSel, toSel) {
 }
 
 await page.goto('file://' + path.join(ROOT, 'index.html'));
+// Real-time sky events (rainbow after rain, full moon...) can pop a "secret found" dialog at any moment;
+// pin the sky so the scripted run is deterministic.
+await page.evaluate(() => { NOA.state.dev.force = { weather: 'sunny', rainbow: false, night: false, fullMoon: false, meteor: false }; });
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(400);
 
@@ -113,6 +116,17 @@ await step('plant + harvest', async () => {
   const prods = await page.evaluate(() => NOA.state.board.filter((it) => it && it.kind === 'product').length);
   if (!prods) throw new Error('no produce');
   await shot('harvested');
+});
+await step('tutorial order deliverable from the first harvest', async () => {
+  const ok = await page.evaluate(() => {
+    const o = NOA.state.orders.find((x) => x.lines.length === 1 && x.lines[0].product === 'rice_1');
+    return !!o && NOA.orders.canDeliver(o);
+  });
+  if (!ok) throw new Error('no deliverable rice order after harvest');
+  await page.locator('.order.ready .btn').first().click();
+  await page.waitForTimeout(800);
+  const step = await page.evaluate(() => NOA.ui.story.current() && NOA.ui.story.current().id);
+  if (step !== 'animal') throw new Error('tutorial did not reach the animal step, at ' + step);
 });
 await step('deliver an order (dev items)', async () => {
   await page.evaluate(() => {

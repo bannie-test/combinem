@@ -1,17 +1,18 @@
-# PROGRESS — Noa Farm prototype
+# PROGRESS · Noa Farm prototype
 
-Checklist dùng để tiếp tục công việc nếu phiên bị ngắt (resume checklist).
+Checklist để tiếp tục công việc nếu phiên bị ngắt.
 
-- [ ] config/ (features, balance, content, payment)
-- [ ] i18n/ (vi, en)
-- [ ] js/core (noa, i18n, time, save, audio, validate)
-- [ ] js/systems (state, items, genetics, farm, board, orders, labs, rewards, shop, payment, gacha, mascots, world, secrets, essence)
-- [ ] js/ui (dom, fx, hud, farm-view, panels, labs-view, shop-view, gacha-view, codex-view, settings-view, story)
-- [ ] css (base, game, gacha)
-- [ ] index.html + js/main.js
-- [ ] tools/simulate.mjs (Monte Carlo kiểm tra tỉ lệ)
-- [ ] tools/build-artifact.mjs (đóng gói 1 file)
-- [ ] tests/smoke.mjs (Playwright)
-- [ ] docs/GDD.md (cốt truyện, hệ thống, tính năng ẩn, cấu hình)
-- [ ] README.md
+- [x] config/ (features, balance, content, payment)
+- [x] i18n/ (vi, en): 640+ khóa, đủ cả hai ngôn ngữ
+- [x] js/core (noa, i18n, time, save, audio, validate)
+- [x] js/systems (state, items, genetics, board, farm, orders, labs, rewards, shop, payment, gacha, mascots, world, secrets, essence)
+- [x] js/ui (dom, fx, hud, farm-view, panels, labs-view, gacha-view, shop-view, codex-view, settings-view, story)
+- [x] css (base, game, gacha)
+- [x] index.html + js/main.js
+- [x] tools/simulate.mjs: tỉ lệ thực tế khớp cấu hình
+- [x] tools/build-artifact.mjs: dist/noa-farm.html + dist/noa-farm-standalone.html
+- [x] tests/smoke.mjs: 21/21 bước qua
+- [x] docs/GDD.md
+- [x] README.md
 - [ ] Publish artifact + tóm tắt cho user
+- [ ] Push lên GitHub: bị chặn 403 (Claude GitHub App chưa có quyền với bannie-test/combinem). Commit đang nằm trong máy.

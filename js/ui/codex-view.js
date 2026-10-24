@@ -32,6 +32,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         seg.append(h('button', { type: 'button', role: 'tab', 'aria-pressed': tab === id ? 'true' : 'false', on: { click: () => { NOA.audio.play('tap'); CV.tab(id); } } }, ic + ' ' + t('codex.' + id)));
       });
       root.append(seg);
+      const on = seg.querySelector('[aria-pressed="true"]');
+      if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       ({ species: CV.species, genes: CV.genes, mascots: CV.mascots, secrets: CV.secrets, story: CV.story })[tab](root);
     },
 

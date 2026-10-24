@@ -45,11 +45,14 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const out = [];
       let geneCount = 0;
       const tierUnits = B().product.tierUnits;
+      const pack = h.packFromUnits || {};
       for (const [speciesId, count] of parts) {
         let left = count;
         const prods = C().species[speciesId].products;
+        let top = Math.min(h.maxProductTier, prods.length);
+        while (top > 1 && pack[top] && count < pack[top]) top -= 1;
         while (left > 0) {
-          let tier = Math.min(h.maxProductTier, prods.length);
+          let tier = top;
           while (tier > 1 && tierUnits[tier] > left) tier -= 1;
           left -= tierUnits[tier];
           const q = I().stat(item, 'quality') + U.randInt(-h.starJitter, h.starJitter);

@@ -56,7 +56,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         lines.push(line);
       }
       const npcs = Object.keys(C().npcs).filter((id) => !C().npcs[id].vip && !C().npcs[id].earth);
-      return {
+      return NOA.hooks.run('order.generated', {
         id: U.uid('o'),
         npc: isVip ? 'traveler' : isEarth ? 'na' : U.pick(npcs),
         vip: isVip,
@@ -64,7 +64,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         lines,
         value: 0,
         createdAt: NOA.time.now()
-      };
+      });
     },
     fill() {
       const s = S();

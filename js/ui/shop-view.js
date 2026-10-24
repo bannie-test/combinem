@@ -30,6 +30,8 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         seg.append(h('button', { type: 'button', role: 'tab', 'aria-pressed': tab === id ? 'true' : 'false', on: { click: () => { NOA.audio.play('tap'); SV.tab(id); } } }, label));
       });
       root.append(seg);
+      const on = seg.querySelector('[aria-pressed="true"]');
+      if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       if (tab === 'items') SV.renderItems(root);
       else if (tab === 'gems') SV.renderGems(root);
       else SV.renderOffers(root);

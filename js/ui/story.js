@@ -104,6 +104,18 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
         tu.counts[st.id] = (tu.counts[st.id] || 0) + 1;
         if (tu.counts[st.id] >= (st.count || 1)) setTimeout(ST.advance, 350);
       });
+      // While the tutorial runs, keep one easy order (1 Rice Sheaf) on the board
+      NOA.hooks.add('order.generated', (o) => {
+        const tu = S().tutorial;
+        const orderStep = ST.steps().findIndex((s) => s.id === 'order');
+        if (!NOA.FEATURES.tutorial || tu.done || tu.step > orderStep) return o;
+        const hasEasy = S().orders.some((x) => x.lines.length === 1 && x.lines[0].product === 'rice_1' && x.lines[0].count === 1);
+        if (!hasEasy && !o.vip) {
+          o.lines = [{ product: 'rice_1', count: 1, filled: 0, minStars: 0, needGene: false }];
+          o.earth = false;
+        }
+        return o;
+      });
       // During the first steps the seed sack always gives rice (so the first merge is guaranteed)
       // and the first animal is a chicken (fed with rice).
       NOA.hooks.add('spawn.species', (sp, info) => {
