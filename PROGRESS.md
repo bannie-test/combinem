@@ -16,4 +16,4 @@ Checklist để tiếp tục công việc nếu phiên bị ngắt.
 - [x] tests/smoke.mjs v2: 29/29 bước qua, không lỗi console, không còn khóa i18n thô
 - [x] docs/GDD.md v0.2 + §20 tech stack mobile; README
 - [x] Build & publish lại artifact (cùng URL)
-- [ ] Push lên GitHub: bị chặn 403 (Claude GitHub App chưa có quyền với bannie-test/combinem). Commit nằm trong máy.
+- [x] Push lên GitHub: nhánh `claude/adoring-shannon-a7paup` (bannie-test/combinem)
