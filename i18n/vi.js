@@ -336,8 +336,8 @@ NOA.I18N.vi = {
   'farm.field': 'Ruộng & chuồng',
   'farm.plot': 'Ô đất',
   'farm.pen': 'Chuồng',
-  'farm.emptyPlot': 'Kéo hạt vào',
-  'farm.emptyPen': 'Kéo con giống vào',
+  'farm.emptyPlot': 'Thả hạt',
+  'farm.emptyPen': 'Thả con giống',
   'farm.hungry': 'Đói! Cho ăn {list}',
   'farm.feed': 'Thức ăn: {n}',
   'farm.harvest': 'Thu hoạch!',
@@ -375,6 +375,7 @@ NOA.I18N.vi = {
   'lab.greenhouse.desc': 'Nghiên cứu gen thực vật. Áp dụng cho mọi hạt giống.',
   'lab.ranch.desc': 'Nghiên cứu gen động vật. Áp dụng cho mọi con giống.',
   'lab.upgrade': 'Nâng cấp',
+  'lab.upgradeTo': 'Lên Lv{n}',
   'lab.maxed': 'Đã tối đa',
   'lab.success': 'Tỉ lệ thành công (giữ gen, độ thuần, dung hợp)',
   'lab.spawn': 'Tỉ lệ xuất hiện gen mới',
@@ -655,6 +656,8 @@ NOA.I18N.vi = {
   'dev.simResult': 'Kết quả giả lập {box}',
   'dev.config': 'Kiểm tra cấu hình',
   'dev.configOk': 'Cấu hình hợp lệ ✓',
+  'dev.cfg': 'cấu hình',
+  'dev.real': 'thực tế',
   'dev.labMax': 'Viện lên tối đa',
 
   /* ---------------- cốt truyện */

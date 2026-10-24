@@ -336,8 +336,8 @@ NOA.I18N.en = {
   'farm.field': 'Fields & pens',
   'farm.plot': 'Plot',
   'farm.pen': 'Pen',
-  'farm.emptyPlot': 'Drop a seed',
-  'farm.emptyPen': 'Drop an animal',
+  'farm.emptyPlot': 'Drop seed',
+  'farm.emptyPen': 'Drop animal',
   'farm.hungry': 'Hungry! Feed {list}',
   'farm.feed': 'Feed: {n}',
   'farm.harvest': 'Harvest!',
@@ -375,6 +375,7 @@ NOA.I18N.en = {
   'lab.greenhouse.desc': 'Studies plant genes. Applies to every seed.',
   'lab.ranch.desc': 'Studies animal genes. Applies to every animal.',
   'lab.upgrade': 'Upgrade',
+  'lab.upgradeTo': 'To Lv{n}',
   'lab.maxed': 'Maxed',
   'lab.success': 'Success rate (keep gene, purity, fusion)',
   'lab.spawn': 'New gene chance',
@@ -655,6 +656,8 @@ NOA.I18N.en = {
   'dev.simResult': 'Simulation · {box}',
   'dev.config': 'Check config',
   'dev.configOk': 'Config is valid ✓',
+  'dev.cfg': 'config',
+  'dev.real': 'observed',
   'dev.labMax': 'Max out labs',
 
   /* ---------------- story */
