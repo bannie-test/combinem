@@ -254,7 +254,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     if (!rows.length) return;
     const c = UI.center(cell);
     preview = h('div', { class: 'preview', role: 'tooltip' }, rows.map((r) =>
-      h('div', { class: 'pr' + (r.p == null ? ' lock' : '') }, h('span', null, t(r.k, r.params)), r.p != null ? h('b', null, UI.pct(r.p)) : null)));
+      h('div', { class: 'pr' + (r.p == null ? ' lock' : '') }, h('span', null, t(r.k, r.params)), r.p != null ? UI.chance(r.p) : null)));
     preview.style.left = Math.max(110, Math.min(innerWidth - 110, c.x)) + 'px';
     preview.style.top = (c.y - c.h / 2) + 'px';
     document.body.append(preview);

@@ -68,20 +68,33 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
     upgradeTab(b, lab) {
       const lvl = L().level(lab);
       const cur = L().data(lab);
+      const top = B().labs.levels[B().labs.maxLevel];
       const next = lvl < B().labs.maxLevel ? B().labs.levels[lvl + 1] : null;
-      const pct = (v) => UI.pct(v);
+      const G = B().gene;
+      // odds: a meter against the best lab level, never the raw percentage
+      const odds = [
+        ['lab.success', (d) => d.success],
+        ['lab.spawn', (d) => G.spawnChance + d.spawnAdd],
+        ['lab.break', (d) => d.breakAdd],
+        ['lab.discovery', (d) => B().hybrid.baseDiscovery + d.discoveryAdd]
+      ];
+      const SEG = 10;
+      const meter = (v, nv, max) => {
+        const f = Math.round(SEG * v / max), nf = nv == null ? f : Math.round(SEG * nv / max);
+        return h('span', { class: 'meter', role: 'img', 'aria-label': f + '/' + SEG },
+          Array.from({ length: SEG }, (_, i) => h('i', { class: i < f ? 'on' : i < nf ? 'up' : '' })));
+      };
+      const list = h('div', { class: 'lab-odds' }, h('h4', null, t('lab.chanceTitle')));
+      odds.forEach(([k, fn]) => list.append(h('div', { class: 'odd-row' }, h('span', null, t(k)), meter(fn(cur), next ? fn(next) : null, fn(top)))));
+      b.append(list);
       const rows = [
-        ['lab.success', '+' + pct(cur.success), next ? '+' + pct(next.success) : null],
-        ['lab.spawn', pct(B().gene.spawnChance + cur.spawnAdd), next ? pct(B().gene.spawnChance + next.spawnAdd) : null],
-        ['lab.break', '+' + pct(cur.breakAdd), next ? '+' + pct(next.breakAdd) : null],
         ['lab.purityCap', '◆' + cur.purityCap, next ? '◆' + next.purityCap : null],
         ['lab.fusionTier', t('tier.n', { n: cur.fusionTier }), next ? t('tier.n', { n: next.fusionTier }) : null],
-        ['lab.slots', String(cur.slots), next ? String(next.slots) : null],
-        ['lab.discovery', pct(B().hybrid.baseDiscovery + cur.discoveryAdd), next ? pct(B().hybrid.baseDiscovery + next.discoveryAdd) : null]
+        ['lab.slots', String(cur.slots), next ? String(next.slots) : null]
       ];
       const kv = h('dl', { class: 'kv' });
       rows.forEach(([k, v, n]) => kv.append(h('dt', null, t(k)), h('dd', null, v), h('span', { class: 'up' }, n && n !== v ? '→ ' + n : '')));
-      b.append(kv);
+      b.append(h('h4', { class: 'lab-h4' }, t('lab.statTitle')), kv);
       if (!next) { b.append(h('p', { class: 'notice', style: { textAlign: 'center' } }, '🏆 ' + t('lab.maxed'))); return; }
       const can = NOA.res.canAfford(next.cost);
       b.append(UI.btn('⬆️ ' + t('lab.upgradeTo', { n: lvl + 1 }) + ' · ' + UI.cost(next.cost), can ? 'leaf block' : 'ghost block', () => {

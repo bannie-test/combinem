@@ -58,7 +58,7 @@ async function tapMap(sel) {
   await page.waitForTimeout(550);
   await page.locator(sel).click();
 }
-const finishAll = () => ev(() => NOA.ui.settings.finishAll());
+const finishAll = () => ev(() => NOA.dev.finishAll());
 const closeModals = async () => { for (let i = 0; i < 4; i++) { if (!(await ev(() => NOA.ui.hasModal()))) break; await ev(() => NOA.ui.closeTopModal()); await page.waitForTimeout(250); } };
 
 await page.goto('file://' + path.join(ROOT, 'index.html'));
@@ -370,7 +370,7 @@ await step('settings + dev panel', async () => {
   await page.waitForSelector('.modal');
   await shot('settings');
   await closeModals();
-  await ev(() => NOA.ui.settings.dev());
+  await ev(() => NOA.dev.open());
   await page.waitForTimeout(250);
   await shot('dev');
   await closeModals();

@@ -7,8 +7,9 @@
 var NOA = globalThis.NOA = globalThis.NOA || {};
 
 NOA.FEATURES = {
-  // Bảng công cụ dành cho dev (cộng tiền, tua thời gian, đổi tỉ lệ, giả lập...)
-  devPanel: true,
+  // Bảng công cụ dành cho dev (cộng tiền, tua thời gian, xem tỉ lệ, giả lập...).
+  // Luôn TẮT ở bản phát hành: chỉ trang phát triển (index.html) nạp js/dev/dev-tools.js và tự bật cờ này.
+  devPanel: false,
 
   // Thời tiết thay đổi theo thời gian thực (nắng / mây / mưa / giông)
   weather: true,

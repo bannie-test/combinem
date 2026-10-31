@@ -17,3 +17,12 @@ Checklist để tiếp tục công việc nếu phiên bị ngắt.
 - [x] docs/GDD.md v0.2 + §20 tech stack mobile; README
 - [x] Build & publish lại artifact (cùng URL)
 - [x] Push lên GitHub: nhánh `claude/adoring-shannon-a7paup` (bannie-test/combinem)
+
+## v0.3 · đồ họa bản đồ 2D nghiêng có đổ bóng, skin UI hoạt hình, ẩn thông tin nội bộ
+Yêu cầu: bản đồ tự nhiên, 2D góc nhìn nghiêng từ trên xuống có đổ bóng, hoạt hình ngộ nghĩnh như Hay Day / Township;
+ẩn mọi chú thích / nút dẫn tới thông tin nội bộ (tỉ lệ ra đồ, công cụ dev). Có lịch tự tiếp tục: trig_015nmT7t9iEs9rNNwQye4nz6 (xóa khi xong).
+- [x] Ẩn thông tin nội bộ: công cụ Dev tách ra js/dev/ (chỉ bản dev, không vào bản build), bỏ nút "Tỉ lệ" gacha, preview merge / bảng Viện / mô tả bùa dùng mức định tính
+- [~] Bộ vẽ hoạt hình bằng canvas: js/ui/art/ (địa hình, công trình 3/4, cây trồng, vật nuôi, cache sprite) — tạm dừng; chuyển sang asset vẽ bằng AI theo docs/ART_PROMPTS.md
+- [ ] Bản đồ mới: địa hình tự nhiên + sprite + bong bóng kiểu Hay Day, cối xay gió quay, con vật đi lại
+- [ ] Skin UI: HUD, nút bóng, bảng gỗ / giấy da, thanh tab
+- [ ] Kiểm thử + ảnh chụp, tài liệu, build (không có code dev), publish cùng URL, commit + push

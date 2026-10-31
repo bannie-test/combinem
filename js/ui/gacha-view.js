@@ -28,7 +28,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       root.append(h('div', { class: 'tickets-bar' },
         Object.keys(B().gacha.boxes).map((id) => h('span', { class: 'ev' }, '🎟️ ' + t('ticket.' + B().gacha.boxes[id].ticket) + ' ×' + (S().tickets[B().gacha.boxes[id].ticket] || 0)))));
       Object.keys(B().gacha.boxes).forEach((id) => root.append(GV.boxCard(id)));
-      root.append(h('p', { class: 'notice' }, '🔎 ' + t('box.ratesNote', { rarity: t('rarity.' + B().gacha.boxes.sprout.multi.guaranteeMinRarity) })));
+      root.append(h('p', { class: 'notice' }, '🎁 ' + t('box.multiNote', { rarity: t('rarity.' + B().gacha.boxes.sprout.multi.guaranteeMinRarity) })));
     },
 
     boxCard(id) {
@@ -49,8 +49,7 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
           pity,
           h('div', { class: 'box-btns' },
             UI.btn(t('box.open1') + ' · ' + costLabel(1), 'sm berry', () => GV.open(id, 1), { disabled: !unlocked }),
-            UI.btn(t('box.open10') + ' · ' + costLabel(box.multi.count), 'sm sun', () => GV.open(id, box.multi.count), { disabled: !unlocked }),
-            UI.btn(t('ui.rates'), 'sm ghost', () => GV.ratesModal(id)))));
+            UI.btn(t('box.open10') + ' · ' + costLabel(box.multi.count), 'sm sun', () => GV.open(id, box.multi.count), { disabled: !unlocked }))));
       return card;
     },
 
@@ -226,27 +225,6 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
             sub ? h('div', { class: 'gc-sub' }, sub) : null,
             desc ? h('div', { class: 'gc-desc' }, desc) : null,
             r.isNew ? h('span', { class: 'gc-new' }, t('ui.new')) : null)));
-    },
-
-    ratesModal(id) {
-      const rates = NOA.gacha.rates(id);
-      const box = B().gacha.boxes[id];
-      UI.modal({
-        title: t('box.ratesTitle', { box: t('box.' + id) }),
-        body: (b) => {
-          const tb = h('table', { class: 'rate-table' });
-          rates.forEach((r) => {
-            tb.append(h('tr', { class: 'rh' },
-              h('td', null, h('span', { class: 'rh-dot', style: { background: RC[r.rarity] } }), t('rarity.' + r.rarity)),
-              h('td', { class: 'p' }, UI.pct(r.p))));
-            r.entries.forEach((e) => tb.append(h('tr', null, h('td', null, '· ' + t('reward.' + e.rewardId)), h('td', { class: 'p' }, UI.pct(e.p)))));
-          });
-          b.append(h('div', { style: { overflowX: 'auto' } }, tb));
-          const pity = Object.keys(box.pity || {}).map((r) => t('box.pity', { rarity: t('rarity.' + r), n: box.pity[r] })).join(' · ');
-          if (pity) b.append(h('p', { class: 'notice' }, pity));
-          b.append(h('p', { class: 'muted tiny' }, t('box.ratesNote', { rarity: t('rarity.' + box.multi.guaranteeMinRarity) })));
-        }
-      });
     }
   };
 })();

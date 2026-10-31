@@ -53,6 +53,9 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
   UI.compact = (n) => NOA.i18n.compact(n);
   UI.pct = (p) => NOA.util.pct(p);
   UI.dur = (ms) => NOA.util.fmtDuration(ms);
+  /** Players see odds as words (Rất thấp … Chắc chắn), never as exact percentages */
+  UI.chanceKey = (p) => (p >= 0.999 ? 'sure' : p >= 0.6 ? 'high' : p >= 0.3 ? 'fair' : p >= 0.1 ? 'low' : 'tiny');
+  UI.chance = (p) => { const k = UI.chanceKey(p); return UI.h('b', { class: 'chance c-' + k }, t('chance.' + k)); };
   const COST_ICON = { coins: '🪙', gems: '💎', rp: '🔬' };
   UI.cost = function (cost) {
     const parts = [];

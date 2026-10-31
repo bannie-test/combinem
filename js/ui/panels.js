@@ -116,14 +116,12 @@ var NOA = globalThis.NOA = globalThis.NOA || {};
       const childLv = Math.max(1, it.level - B().harvest.seeds.levelDrop);
       if (it.kind === 'seed') {
         meta.append(h('div', null, '🌾 ' + t('item.harvestEst', { n: est, t: tm })));
-        const sc = B().harvest.seeds;
-        const n = (sc.countByLevel[it.level] || 1) + sc.extraChance + I().stat(it, 'yield') * sc.extraPerYieldPoint;
-        meta.append(h('div', null, '🌰 ' + t('item.seedsEst', { n: (Math.round(n * 10) / 10).toLocaleString(NOA.i18n.locale()), lv: childLv })));
+        const base = B().harvest.seeds.countByLevel[it.level] || 1;
+        meta.append(h('div', null, '🌰 ' + t('item.seedsEst', { n: base + '–' + (base + 1), lv: childLv })));
         if (sp.byproduct) meta.append(h('div', null, C().materials[sp.byproduct].emoji + ' ' + t('codex.byproduct', { list: t('material.' + sp.byproduct) })));
       } else {
         meta.append(h('div', null, '🧺 ' + t('item.cycleEst', { n: est, t: tm })));
-        const lv = B().livestock;
-        meta.append(h('div', null, '🐣 ' + t('item.youngEst', { p: UI.pct(lv.offspringChance + lv.offspringPerLevel * it.level), lv: childLv })));
+        meta.append(h('div', null, '🐣 ' + t('item.youngEst', { lv: childLv })));
         meta.append(h('div', null, '🍽️ ' + t('item.eats', { list: goodsList(sp.feed || []) })));
         if (sp.manure) meta.append(h('div', null, '💩 ' + t('material.manure')));
       }

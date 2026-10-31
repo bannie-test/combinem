@@ -15,7 +15,10 @@ const metas = (src.match(/<meta name="(claude:viewport-fit-sides|description)"[^
 const fontLinks = (src.match(/<link rel="(preconnect|stylesheet)" href="https:\/\/fonts[^>]*>/g) || []).join('\n');
 const css = [...src.matchAll(/<link rel="stylesheet" href="(css\/[^"]+)">/g)]
   .map((m) => `/* ${m[1]} */\n` + read(m[1])).join('\n');
-const scripts = [...src.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+// scripts marked data-dev (developer tools) never ship to players
+const scripts = [...src.matchAll(/<script src="([^"]+)"([^>]*)><\/script>/g)]
+  .filter((m) => !/\bdata-dev\b/.test(m[2]))
+  .map((m) => m[1]);
 const js = scripts.map((rel) => `// ---- ${rel}\n` + read(rel).replace(/<\/script/gi, '<\\/script')).join('\n');
 
 const body = `<div id="app" class="app"></div>
